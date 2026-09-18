@@ -174,7 +174,7 @@
     color: var(--muted);
     font-weight: 700;
     padding: 0;
-    margin-bottom: 2px;
+    margin-bottom: 6px !important;
   }
 
   .field {
@@ -274,11 +274,22 @@
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
+    height: 18px;
+    background: transparent;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-runnable-track {
     height: 4px;
     border-radius: 999px;
     background: var(--border);
-    outline: none;
-    cursor: pointer;
+  }
+
+  input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--border);
   }
 
   input[type="range"]::-webkit-slider-thumb {
@@ -286,6 +297,7 @@
     appearance: none;
     width: 16px;
     height: 16px;
+    margin-top: -6px;
     border-radius: 50%;
     background: var(--accent);
     border: 2px solid #10131a;
@@ -411,6 +423,24 @@
     border-color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent);
   }
+
+  button.accent {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: 1px solid var(--accent);
+    border-radius: 9px;
+    padding: 11px 16px;
+    font-size: 13px;
+    font-weight: 800;
+    font-family: inherit;
+    cursor: pointer;
+    letter-spacing: 0.2px;
+    transition: filter 0.15s, transform 0.1s;
+  }
+
+  button.accent:hover { filter: brightness(1.08); }
+  button.accent:active { transform: scale(0.99); }
 
   .divider {
     height: 1px;
@@ -831,6 +861,17 @@
       <button class="primary" type="button" id="download">Download PNG</button>
       <button class="ghost" type="button" id="saveSettings">Save settings</button>
       <div class="meta" id="settingsStatus">Settings are not saved yet.</div>
+      <div class="divider"></div>
+      <button class="accent" type="button" id="saveProject">Save project</button>
+      <div class="row" style="margin-top: 8px">
+        <button class="ghost" type="button" id="exportProject">Export project (.json)</button>
+      </div>
+      <div class="row">
+        <button class="ghost" type="button" id="importProject">Import project (.json)</button>
+      </div>
+      <input type="file" id="importProjectInput" accept=".json,application/json" style="display:none" />
+      <div class="meta" id="projectStatus"></div>
+      <div class="meta" id="autosaveStatus"></div>
       <button class="ghost" type="button" id="reset">Reset to defaults</button>
     </fieldset>
   </aside>
@@ -929,6 +970,13 @@
   var settingsStatus = document.getElementById("settingsStatus");
   var undoBtn = document.getElementById("undoBtn");
   var redoBtn = document.getElementById("redoBtn");
+
+  var saveProjectBtn = document.getElementById("saveProject");
+  var exportProjectBtn = document.getElementById("exportProject");
+  var importProjectBtn = document.getElementById("importProject");
+  var importProjectInput = document.getElementById("importProjectInput");
+  var projectStatusEl = document.getElementById("projectStatus");
+  var autoSaveStatusEl = document.getElementById("autosaveStatus");
 
   var SETTINGS_KEY = "yt-thumbnail-generator:settings";
   var SETTINGS_FIELDS = [
@@ -1376,6 +1424,8 @@
       if (!layer.visible || layer.type !== "text") continue;
       drawTextLayer(layer);
     }
+
+    scheduleAutoSave();
   }
 
   function scheduleRender() {
@@ -1559,6 +1609,7 @@
       layer.locked = !layer.locked;
       refreshLayerPanel();
       updateCanvasCursor();
+      scheduleAutoSave();
     });
 
     var name = document.createElement("span");
@@ -1729,8 +1780,11 @@
         c1.value = p.from;
         c2.value = p.to;
         if (selectedLayer && selectedLayer.type === "text") {
-          selectedLayer.color1 = p.from;
-          selectedLayer.color2 = p.to;
+          if (selectedLayer.color1 !== p.from || selectedLayer.color2 !== p.to) {
+            pushUndo();
+            selectedLayer.color1 = p.from;
+            selectedLayer.color2 = p.to;
+          }
         }
         markActivePreset();
         render();
@@ -1841,6 +1895,7 @@
 
     undoStack.length = 0;
     redoStack.length = 0;
+    endEdit();
     updateUndoButtons();
   }
 
@@ -2327,6 +2382,310 @@
     return copy;
   }
 
+  /* ---------------- Project serialization ---------------- */
+
+  function imageToDataURL(img) {
+    if (!img) return null;
+    if (img.tagName === "CANVAS") {
+      return img.toDataURL("image/png");
+    }
+    // HTMLImageElement \u2014 draw to an offscreen canvas to get a data URL
+    var c = document.createElement("canvas");
+    c.width = imgW(img);
+    c.height = imgH(img);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/png");
+  }
+
+  function serializeProject() {
+    return {
+      version: 1,
+      layers: layers.map(function (layer) {
+        var s = {
+          id: layer.id,
+          type: layer.type,
+          visible: layer.visible,
+          locked: layer.locked,
+          name: layer.name
+        };
+        if (layer.type === "background" || layer.type === "image") {
+          s.imageDataURL = imageToDataURL(layer.image);
+          // an uploaded image keeps its data URL in src, which would double the
+          // payload; only keep src when it points somewhere re-fetchable
+          s.src = layer.src && layer.src.indexOf("data:") !== 0 ? layer.src : null;
+          s.x = layer.x;
+          s.y = layer.y;
+          s.scale = layer.scale;
+        }
+        if (layer.type === "background") {
+          s.overlay = layer.overlay;
+          s.overlayStart = layer.overlayStart;
+        }
+        if (layer.type === "text") {
+          s.text = layer.text.slice();
+          s.presetCjk = layer.presetCjk;
+          s.color1 = layer.color1;
+          s.color2 = layer.color2;
+          s.gradientAngle = layer.gradientAngle;
+          s.fontSize = layer.fontSize;
+          s.lineHeight = layer.lineHeight;
+          s.textY = layer.textY;
+          s.strokeWidth = layer.strokeWidth;
+          s.strokeColor = layer.strokeColor;
+          s.shadowX = layer.shadowX;
+          s.shadowY = layer.shadowY;
+          s.shadowBlur = layer.shadowBlur;
+          s.shadowColor = layer.shadowColor;
+        }
+        if (layer.type === "image") {
+          s.strokeWidth = layer.strokeWidth;
+          s.strokeColor = layer.strokeColor;
+          s.shadowX = layer.shadowX;
+          s.shadowY = layer.shadowY;
+          s.shadowBlur = layer.shadowBlur;
+          s.shadowColor = layer.shadowColor;
+          s.eraseRadius = layer.eraseRadius;
+        }
+        return s;
+      }),
+      selectedId: selectedLayer ? selectedLayer.id : null,
+      savedAt: new Date().toISOString()
+    };
+  }
+
+  function loadImage(url) {
+    return new Promise(function (resolve) {
+      if (!url) { resolve(null); return; }
+      var img = new Image();
+      img.onload = function () { resolve(img); };
+      img.onerror = function () { resolve(null); };
+      img.src = url;
+    });
+  }
+
+  async function deserializeProject(data) {
+    if (!data || !data.layers) return false;
+
+    var newLayers = [];
+    for (var i = 0; i < data.layers.length; i++) {
+      var s = data.layers[i];
+      var layer;
+
+      if (s.type === "background") {
+        layer = createBackgroundLayer();
+      } else if (s.type === "text") {
+        layer = createTextLayer();
+      } else if (s.type === "image") {
+        layer = createImageLayer();
+      } else {
+        continue;
+      }
+
+      // common fields
+      layer.id = s.id || layer.id;
+      layer.visible = s.visible !== undefined ? s.visible : true;
+      layer.locked = s.locked || false;
+      layer.name = s.name || layer.name;
+
+      // images load asynchronously from their data URLs
+      if (s.type === "background" || s.type === "image") {
+        layer.image = await loadImage(s.imageDataURL);
+        layer.src = s.src || null;
+        layer.x = s.x || 0;
+        layer.y = s.y || 0;
+        layer.scale = s.scale || 1;
+      }
+
+      if (s.type === "background") {
+        layer.overlay = s.overlay !== undefined ? s.overlay : DEFAULTS.overlay;
+        layer.overlayStart = s.overlayStart !== undefined ? s.overlayStart : DEFAULTS.overlayStart;
+      }
+
+      if (s.type === "text") {
+        layer.text = s.text || ["", "", ""];
+        layer.presetCjk = s.presetCjk || false;
+        layer.color1 = s.color1 || DEFAULTS.color1;
+        layer.color2 = s.color2 || DEFAULTS.color2;
+        layer.gradientAngle = s.gradientAngle !== undefined ? s.gradientAngle : DEFAULTS.gradientAngle;
+        layer.fontSize = s.fontSize || DEFAULTS.fontSize;
+        layer.lineHeight = s.lineHeight || DEFAULTS.lineHeight;
+        layer.textY = s.textY !== undefined ? s.textY : DEFAULTS.textY;
+        layer.strokeWidth = s.strokeWidth || 0;
+        layer.strokeColor = s.strokeColor || "#000000";
+        layer.shadowX = s.shadowX || 0;
+        layer.shadowY = s.shadowY || 0;
+        layer.shadowBlur = s.shadowBlur || 0;
+        layer.shadowColor = s.shadowColor || "#000000";
+      }
+
+      if (s.type === "image") {
+        layer.strokeWidth = s.strokeWidth || 0;
+        layer.strokeColor = s.strokeColor || "#000000";
+        layer.shadowX = s.shadowX || 0;
+        layer.shadowY = s.shadowY || 0;
+        layer.shadowBlur = s.shadowBlur || 0;
+        layer.shadowColor = s.shadowColor || "#000000";
+        layer.eraseRadius = s.eraseRadius || 20;
+      }
+
+      newLayers.push(layer);
+    }
+
+    if (newLayers.length === 0) return false;
+
+    layers = newLayers;
+
+    // restore selection
+    if (data.selectedId) {
+      var found = null;
+      for (var j = 0; j < layers.length; j++) {
+        if (layers[j].id === data.selectedId) found = layers[j];
+      }
+      selectLayer(found || layers[0]);
+    } else {
+      selectLayer(layers[0]);
+    }
+
+    refreshLayerPanel();
+    undoStack.length = 0;
+    redoStack.length = 0;
+    updateUndoButtons();
+    render();
+    return true;
+  }
+
+  /* ---------------- Project storage ---------------- */
+
+  var PROJECT_KEY = "yt-thumbnail-generator:project";
+  var MAX_PROJECT_SIZE = 4 * 1024 * 1024; // 4MB, safely under the ~5MB localStorage cap
+
+  var autoSaveTimer = null;
+  var autoSaveReady = false;
+
+  function saveProject() {
+    try {
+      var data = serializeProject();
+      var json = JSON.stringify(data);
+      if (json.length > MAX_PROJECT_SIZE) {
+        return { ok: false, reason: "too_large", size: json.length };
+      }
+      localStorage.setItem(PROJECT_KEY, json);
+      return { ok: true, size: json.length };
+    } catch (e) {
+      return { ok: false, reason: e.message || "unknown" };
+    }
+  }
+
+  function loadSavedProject() {
+    try {
+      var raw = localStorage.getItem(PROJECT_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function scheduleAutoSave() {
+    if (!autoSaveReady) return;
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(function () {
+      autoSaveTimer = null;
+      var result = saveProject();
+      if (!autoSaveStatusEl) return;
+      if (result.ok) {
+        autoSaveStatusEl.textContent = "Auto-saved";
+        autoSaveStatusEl.style.color = "";
+      } else if (result.reason === "too_large") {
+        autoSaveStatusEl.textContent = "Project too large to auto-save \u2014 use Export";
+        autoSaveStatusEl.style.color = "#ff9800";
+      }
+    }, 2000);
+  }
+
+  function exportProject() {
+    var data = serializeProject();
+    var json = JSON.stringify(data, null, 2);
+    var blob = new Blob([json], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "thumbnail-project-" + Date.now() + ".json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    if (projectStatusEl) {
+      projectStatusEl.textContent = "Project exported";
+      projectStatusEl.style.color = "";
+    }
+  }
+
+  function importProject(file) {
+    var reader = new FileReader();
+    reader.onload = async function (e) {
+      try {
+        var data = JSON.parse(e.target.result);
+        var ok = await deserializeProject(data);
+        if (ok) {
+          scheduleAutoSave();
+          if (projectStatusEl) {
+            projectStatusEl.textContent = "Project imported";
+            projectStatusEl.style.color = "";
+          }
+        } else if (projectStatusEl) {
+          projectStatusEl.textContent = "Invalid project file";
+          projectStatusEl.style.color = "#f44336";
+        }
+      } catch (err) {
+        if (projectStatusEl) {
+          projectStatusEl.textContent = "Could not read project file";
+          projectStatusEl.style.color = "#f44336";
+        }
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function getStorageUsage() {
+    try {
+      var total = 0;
+      for (var key in localStorage) {
+        if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
+          total += (localStorage.getItem(key) || "").length * 2; // UTF-16 code units
+        }
+      }
+      return total;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function updateStorageStatus() {
+    if (!autoSaveStatusEl) return;
+    var kb = (getStorageUsage() / 1024).toFixed(0);
+    autoSaveStatusEl.textContent = "Storage used: " + kb + " KB";
+  }
+
+  function restoreSavedProject() {
+    var saved = loadSavedProject();
+    if (!saved) {
+      autoSaveReady = true;
+      updateStorageStatus();
+      return;
+    }
+    deserializeProject(saved).then(function (ok) {
+      autoSaveReady = true;
+      if (!autoSaveStatusEl) return;
+      if (ok) {
+        autoSaveStatusEl.textContent = "Loaded saved project";
+        autoSaveStatusEl.style.color = "";
+      } else {
+        updateStorageStatus();
+      }
+    });
+  }
+
   function snapshot() {
     return {
       layers: layers.map(cloneLayer),
@@ -2346,7 +2705,37 @@
     updateUndoButtons();
   }
 
+  // a slider drag fires "input" continuously, so a whole gesture is recorded
+  // as a single history entry: one push when the gesture starts, then the
+  // entry is closed on "change" (pointer release / keyboard commit) or after
+  // a short idle gap
+  var editTransaction = false;
+  var editTimer = null;
+
+  function endEdit() {
+    editTransaction = false;
+    if (editTimer) {
+      clearTimeout(editTimer);
+      editTimer = null;
+    }
+  }
+
+  function beginEdit() {
+    if (!editTransaction) {
+      editTransaction = true;
+      pushUndo();
+    }
+    if (editTimer) clearTimeout(editTimer);
+    editTimer = setTimeout(endEdit, 600);
+  }
+
+  document.addEventListener("change", function (e) {
+    var target = e.target;
+    if (target && (target.type === "range" || target.type === "color")) endEdit();
+  });
+
   function restoreSnapshot(state) {
+    endEdit();
     if (eraserLayer) {
       eraserLayer = null;
       eraseState = null;
@@ -2445,6 +2834,7 @@
   [c1, c2].forEach(function (input) {
     input.addEventListener("input", function () {
       if (selectedLayer && selectedLayer.type === "text") {
+        beginEdit();
         selectedLayer.color1 = c1.value;
         selectedLayer.color2 = c2.value;
       }
@@ -2455,7 +2845,10 @@
 
   function bindTextSlider(el, prop) {
     el.addEventListener("input", function () {
-      if (selectedLayer && selectedLayer.type === "text") selectedLayer[prop] = Number(el.value);
+      if (selectedLayer && selectedLayer.type === "text") {
+        beginEdit();
+        selectedLayer[prop] = Number(el.value);
+      }
       syncSliderLabels();
       renderDebounced();
     });
@@ -2471,18 +2864,27 @@
   bindTextSlider(shadowBlurEl, "shadowBlur");
 
   strokeColorEl.addEventListener("input", function () {
-    if (selectedLayer && selectedLayer.type === "text") selectedLayer.strokeColor = strokeColorEl.value;
+    if (selectedLayer && selectedLayer.type === "text") {
+      beginEdit();
+      selectedLayer.strokeColor = strokeColorEl.value;
+    }
     renderDebounced();
   });
 
   shadowColorEl.addEventListener("input", function () {
-    if (selectedLayer && selectedLayer.type === "text") selectedLayer.shadowColor = shadowColorEl.value;
+    if (selectedLayer && selectedLayer.type === "text") {
+      beginEdit();
+      selectedLayer.shadowColor = shadowColorEl.value;
+    }
     renderDebounced();
   });
 
   function bindOverlaySlider(el, prop) {
     el.addEventListener("input", function () {
-      if (selectedLayer && selectedLayer.type === "background") selectedLayer[prop] = Number(el.value);
+      if (selectedLayer && selectedLayer.type === "background") {
+        beginEdit();
+        selectedLayer[prop] = Number(el.value);
+      }
       syncSliderLabels();
       renderDebounced();
     });
@@ -2499,6 +2901,7 @@
   function bindImageSlider(el, prop, labelEl) {
     el.addEventListener("input", function () {
       if (selectedLayer && selectedLayer.type === "image") {
+        beginEdit();
         selectedLayer[prop] = Number(el.value);
         labelEl.textContent = formatImageValue(prop, el.value);
       }
@@ -2520,12 +2923,18 @@
   });
 
   imgStrokeColorEl.addEventListener("input", function () {
-    if (selectedLayer && selectedLayer.type === "image") selectedLayer.strokeColor = imgStrokeColorEl.value;
+    if (selectedLayer && selectedLayer.type === "image") {
+      beginEdit();
+      selectedLayer.strokeColor = imgStrokeColorEl.value;
+    }
     renderDebounced();
   });
 
   imgShadowColorEl.addEventListener("input", function () {
-    if (selectedLayer && selectedLayer.type === "image") selectedLayer.shadowColor = imgShadowColorEl.value;
+    if (selectedLayer && selectedLayer.type === "image") {
+      beginEdit();
+      selectedLayer.shadowColor = imgShadowColorEl.value;
+    }
     renderDebounced();
   });
 
@@ -2558,10 +2967,41 @@
   resetBtn.addEventListener("click", reset);
   saveSettingsBtn.addEventListener("click", saveSettings);
 
+  saveProjectBtn.addEventListener("click", function () {
+    var result = saveProject();
+    if (!projectStatusEl) return;
+    if (result.ok) {
+      var kb = (result.size / 1024).toFixed(0);
+      projectStatusEl.textContent = "Saved (" + kb + " KB)";
+      projectStatusEl.style.color = "";
+    } else if (result.reason === "too_large") {
+      var mb = (result.size / (1024 * 1024)).toFixed(1);
+      projectStatusEl.textContent = "Too large for browser (" + mb + " MB) \u2014 use Export";
+      projectStatusEl.style.color = "#ff9800";
+    } else {
+      projectStatusEl.textContent = "Save failed: " + result.reason;
+      projectStatusEl.style.color = "#f44336";
+    }
+  });
+
+  exportProjectBtn.addEventListener("click", exportProject);
+
+  importProjectBtn.addEventListener("click", function () {
+    importProjectInput.click();
+  });
+
+  importProjectInput.addEventListener("change", function () {
+    if (importProjectInput.files.length > 0) {
+      importProject(importProjectInput.files[0]);
+      importProjectInput.value = "";
+    }
+  });
+
   buildPresets();
   reset();
   loadSavedSettings();
   updateEraserUI();
+  restoreSavedProject();
 
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () { render(); });

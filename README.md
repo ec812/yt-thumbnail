@@ -15,7 +15,17 @@ A single-file web app for composing YouTube thumbnails with layered compositing,
 - **Stroke & shadow** — per text and image layer
 - **Adjustments** — font size (20–120px), line height (1.0–3.0), vertical text position
 - **Save settings** — persist text/style controls to `localStorage` and auto-load on next visit
+- **Save & load project** — auto-save to `localStorage` plus manual Save, and Export/Import as a `.json` file
 - **Export** — download as 1280×720 PNG (all visible layers)
+
+## Save & Load
+
+- **Auto-save** — your project saves automatically 2 seconds after the last change
+- **Save button** — explicit save with size feedback
+- **Export/Import** — download your project as a `.json` file, re-import on any machine
+- **Browser storage** — projects under ~4MB save to browser storage automatically; larger projects need Export/Import
+
+All layers, images, text, effects, and eraser modifications are preserved.
 
 ## Default Style
 
