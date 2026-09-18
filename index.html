@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>YouTube Thumbnail Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;800;900&display=swap" rel="stylesheet" />
 <style>
   :root {
     --bg: #0d0f13;
@@ -88,7 +91,11 @@
     display: block;
     width: 100%;
     height: 100%;
+    touch-action: none;
   }
+
+  canvas#canvas.can-drag { cursor: grab; }
+  canvas#canvas.dragging { cursor: grabbing; }
 
   .hint {
     margin-top: 10px;
@@ -392,7 +399,7 @@
     <div class="canvas-wrap">
       <canvas id="canvas" width="1280" height="720"></canvas>
     </div>
-    <p class="hint">Upload a background, set your text, tweak the sliders. Export gives you an exact 1280&times;720 PNG.</p>
+    <p class="hint">Upload a background, then <strong>drag the canvas to reposition</strong> it. Set your text, tweak the sliders. Export gives you an exact 1280&times;720 PNG.</p>
   </main>
 
   <aside class="panel">
@@ -411,7 +418,7 @@
       <legend>Text</legend>
       <label class="check">
         <input type="checkbox" id="presetCjk" />
-        Preset line 1 to 直播一會
+        Preset line 1 to 直播一會 <span style="opacity:.6">(solid white)</span>
       </label>
       <div class="field">
         <div class="label-row">
@@ -451,6 +458,63 @@
           <input type="color" id="c2" value="#ff3d00" />
         </div>
       </div>
+      <div class="field">
+        <div class="label-row">
+          <label for="gradientAngle">Angle</label>
+          <span class="value" id="gradientAngleVal">0&deg;</span>
+        </div>
+        <input type="range" id="gradientAngle" min="0" max="360" step="1" value="0" />
+      </div>
+    </fieldset>
+
+    <div class="divider"></div>
+
+    <fieldset>
+      <legend>Stroke</legend>
+      <div class="field">
+        <div class="label-row">
+          <label for="strokeWidth">Width</label>
+          <span class="value" id="strokeWidthVal">0px</span>
+        </div>
+        <input type="range" id="strokeWidth" min="0" max="24" step="1" value="0" />
+      </div>
+      <div class="field">
+        <label for="strokeColor">Color</label>
+        <input type="color" id="strokeColor" value="#000000" />
+      </div>
+    </fieldset>
+
+    <div class="divider"></div>
+
+    <fieldset>
+      <legend>Shadow</legend>
+      <div class="row">
+        <div class="field">
+          <div class="label-row">
+            <label for="shadowX">Offset X</label>
+            <span class="value" id="shadowXVal">0px</span>
+          </div>
+          <input type="range" id="shadowX" min="-40" max="40" step="1" value="0" />
+        </div>
+        <div class="field">
+          <div class="label-row">
+            <label for="shadowY">Offset Y</label>
+            <span class="value" id="shadowYVal">0px</span>
+          </div>
+          <input type="range" id="shadowY" min="-40" max="40" step="1" value="0" />
+        </div>
+      </div>
+      <div class="field">
+        <div class="label-row">
+          <label for="shadowBlur">Blur</label>
+          <span class="value" id="shadowBlurVal">0px</span>
+        </div>
+        <input type="range" id="shadowBlur" min="0" max="60" step="1" value="0" />
+      </div>
+      <div class="field">
+        <label for="shadowColor">Color</label>
+        <input type="color" id="shadowColor" value="#000000" />
+      </div>
     </fieldset>
 
     <div class="divider"></div>
@@ -462,7 +526,14 @@
           <label for="fontSize">Font size</label>
           <span class="value" id="fontSizeVal">72px</span>
         </div>
-        <input type="range" id="fontSize" min="28" max="160" step="1" value="72" />
+        <input type="range" id="fontSize" min="20" max="120" step="1" value="72" />
+      </div>
+      <div class="field">
+        <div class="label-row">
+          <label for="lineHeight">Line height</label>
+          <span class="value" id="lineHeightVal">1.4</span>
+        </div>
+        <input type="range" id="lineHeight" min="1" max="3" step="0.1" value="1.4" />
       </div>
       <div class="field">
         <div class="label-row">
@@ -504,6 +575,13 @@
   var W = 1280;
   var H = 720;
 
+  var FONT_FAMILY = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
+  var FONT_WEIGHT = 800;
+
+  function fontString(fontSize) {
+    return FONT_WEIGHT + " " + fontSize + "px " + FONT_FAMILY;
+  }
+
   var canvas = document.getElementById("canvas");
   var ctx = canvas.getContext("2d");
 
@@ -520,15 +598,31 @@
   var c1 = document.getElementById("c1");
   var c2 = document.getElementById("c2");
   var presetsEl = document.getElementById("presets");
+  var gradientAngleEl = document.getElementById("gradientAngle");
+  var gradientAngleVal = document.getElementById("gradientAngleVal");
 
   var fontSizeEl = document.getElementById("fontSize");
   var fontSizeVal = document.getElementById("fontSizeVal");
+  var lineHeightEl = document.getElementById("lineHeight");
+  var lineHeightVal = document.getElementById("lineHeightVal");
   var textYEl = document.getElementById("textY");
   var textYVal = document.getElementById("textYVal");
   var overlayEl = document.getElementById("overlay");
   var overlayVal = document.getElementById("overlayVal");
   var overlayStartEl = document.getElementById("overlayStart");
   var overlayStartVal = document.getElementById("overlayStartVal");
+
+  var strokeWidthEl = document.getElementById("strokeWidth");
+  var strokeWidthVal = document.getElementById("strokeWidthVal");
+  var strokeColorEl = document.getElementById("strokeColor");
+
+  var shadowXEl = document.getElementById("shadowX");
+  var shadowXVal = document.getElementById("shadowXVal");
+  var shadowYEl = document.getElementById("shadowY");
+  var shadowYVal = document.getElementById("shadowYVal");
+  var shadowBlurEl = document.getElementById("shadowBlur");
+  var shadowBlurVal = document.getElementById("shadowBlurVal");
+  var shadowColorEl = document.getElementById("shadowColor");
 
   var downloadBtn = document.getElementById("download");
   var resetBtn = document.getElementById("reset");
@@ -539,10 +633,18 @@
     line3: "",
     color1: "#ffd54f",
     color2: "#ff3d00",
+    gradientAngle: 0,
     fontSize: 72,
+    lineHeight: 1.4,
     textY: 62,
     overlay: 70,
-    overlayStart: 0
+    overlayStart: 0,
+    strokeWidth: 0,
+    strokeColor: "#000000",
+    shadowX: 0,
+    shadowY: 0,
+    shadowBlur: 0,
+    shadowColor: "#000000"
   };
 
   var PRESETS = [
@@ -553,6 +655,8 @@
   ];
 
   var bgImage = null;
+  var bgOffsetX = 0;
+  var bgOffsetY = 0;
   var offscreen = document.createElement("canvas");
   var offCtx = offscreen.getContext("2d");
 
@@ -582,9 +686,15 @@
     if (!bgImage) return;
 
     var r = coverRect(bgImage.naturalWidth, bgImage.naturalHeight, W, H);
+
+    var dx = Math.min(0, Math.max(W - r.dw, r.dx + bgOffsetX));
+    var dy = Math.min(0, Math.max(H - r.dh, r.dy + bgOffsetY));
+    bgOffsetX = dx - r.dx;
+    bgOffsetY = dy - r.dy;
+
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(bgImage, r.dx, r.dy, r.dw, r.dh);
+    ctx.drawImage(bgImage, dx, dy, r.dw, r.dh);
   }
 
   function drawOverlay() {
@@ -601,42 +711,68 @@
     ctx.fillRect(0, 0, W, H);
   }
 
-  function gradientClippedLine(text, fontSize, colorA, colorB) {
-    ctx.font = "800 " + fontSize + "px " + fontStack(fontSize, text);
+  function gradientClippedLine(text, fontSize, colorA, colorB, lineHeight, angleDeg, solid) {
+    var font = fontString(fontSize);
 
-    var metrics = ctx.measureText(text);
+    offCtx.font = font;
+    offCtx.textAlign = "center";
+    offCtx.textBaseline = "middle";
+
+    var metrics = offCtx.measureText(text);
     var textWidth = Math.ceil(metrics.width);
-    var lineHeight = Math.ceil(fontSize * 1.35);
-    var padX = Math.ceil(fontSize * 0.25);
+    var padX = Math.ceil(fontSize * 0.25) + 8;
     var width = textWidth + padX * 2;
 
     offscreen.width = width;
     offscreen.height = lineHeight;
 
-    offCtx.clearRect(0, 0, width, lineHeight);
-    offCtx.font = ctx.font;
+    offCtx.font = font;
     offCtx.textAlign = "center";
     offCtx.textBaseline = "middle";
+    offCtx.clearRect(0, 0, width, lineHeight);
     offCtx.fillStyle = "#ffffff";
     offCtx.fillText(text, width / 2, lineHeight / 2);
 
-    offCtx.globalCompositeOperation = "source-in";
-    var grad = offCtx.createLinearGradient(0, 0, width, 0);
-    grad.addColorStop(0, colorA);
-    grad.addColorStop(1, colorB);
-    offCtx.fillStyle = grad;
-    offCtx.fillRect(0, 0, width, lineHeight);
-    offCtx.globalCompositeOperation = "source-over";
+    if (!solid) {
+      offCtx.globalCompositeOperation = "source-in";
+
+      var centerY = lineHeight / 2;
+      var ascent = metrics.actualBoundingBoxAscent;
+      var descent = metrics.actualBoundingBoxDescent;
+      if (!(ascent > 0) && !(descent > 0)) {
+        ascent = fontSize * 0.72;
+        descent = fontSize * 0.28;
+      }
+
+      var boxW = Math.max(1, textWidth);
+      var boxH = Math.max(1, ascent + descent);
+      var midX = padX + boxW / 2;
+      var midY = centerY + (descent - ascent) / 2;
+
+      var rad = (Number(angleDeg) * Math.PI) / 180;
+      var dirX = Math.cos(rad);
+      var dirY = Math.sin(rad);
+      var half = (Math.abs(boxW * dirX) + Math.abs(boxH * dirY)) / 2;
+
+      var grad = offCtx.createLinearGradient(
+        midX - dirX * half, midY - dirY * half,
+        midX + dirX * half, midY + dirY * half
+      );
+      grad.addColorStop(0, colorA);
+      grad.addColorStop(1, colorB);
+      offCtx.fillStyle = grad;
+      offCtx.fillRect(0, 0, width, lineHeight);
+      offCtx.globalCompositeOperation = "source-over";
+    }
 
     return { canvas: offscreen, width: width, lineHeight: lineHeight };
   }
 
-  function fontStack(fontSize, text) {
-    var hasCjk = /[\u3000-\u9fff\uff00-\uffef]/.test(text);
-    if (hasCjk) {
-      return '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif';
-    }
-    return '"Helvetica Neue", Helvetica, Arial, "Segoe UI", sans-serif';
+  function applyShadow(ox, oy, blur) {
+    ctx.shadowColor = shadowColorEl.value;
+    ctx.shadowOffsetX = ox;
+    ctx.shadowOffsetY = oy;
+    ctx.shadowBlur = blur;
   }
 
   function drawText() {
@@ -644,17 +780,48 @@
     if (textLines.length === 0) return;
 
     var fontSize = Number(fontSizeEl.value);
-    var lineHeight = Math.ceil(fontSize * 1.35);
+    var lineHeight = Math.max(1, Math.round(fontSize * Number(lineHeightEl.value)));
     var blockHeight = lineHeight * textLines.length;
     var pos = Number(textYEl.value) / 100;
 
     var maxTop = Math.max(0, H - blockHeight);
     var blockTop = Math.round(maxTop * pos);
 
+    var strokeWidth = Number(strokeWidthEl.value);
+    var shadowX = Number(shadowXEl.value);
+    var shadowY = Number(shadowYEl.value);
+    var shadowBlur = Number(shadowBlurEl.value);
+    var hasShadow = shadowBlur > 0 || shadowX !== 0 || shadowY !== 0;
+    var angle = Number(gradientAngleEl.value);
+    var whiteFirstLine = presetCjk.checked && line1.value.trim().length > 0;
+
     for (var i = 0; i < textLines.length; i++) {
-      var result = gradientClippedLine(textLines[i], fontSize, c1.value, c2.value);
-      var x = Math.round((W - result.width) / 2);
+      var line = textLines[i];
       var y = blockTop + i * lineHeight;
+      var centerX = W / 2;
+      var centerY = y + lineHeight / 2;
+
+      var result = gradientClippedLine(line, fontSize, c1.value, c2.value, lineHeight, angle, whiteFirstLine && i === 0);
+      var x = Math.round((W - result.width) / 2);
+
+      if (strokeWidth > 0) {
+        ctx.save();
+        if (hasShadow) applyShadow(shadowX, shadowY, shadowBlur);
+        ctx.font = fontString(fontSize);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.lineWidth = strokeWidth * 2;
+        ctx.strokeStyle = strokeColorEl.value;
+        ctx.strokeText(line, centerX, centerY);
+        ctx.restore();
+      } else if (hasShadow) {
+        ctx.save();
+        applyShadow(shadowX, shadowY, shadowBlur);
+        ctx.drawImage(result.canvas, x, y);
+        ctx.restore();
+      }
 
       ctx.drawImage(result.canvas, x, y);
     }
@@ -688,9 +855,15 @@
 
   function syncSliderLabels() {
     fontSizeVal.textContent = fontSizeEl.value + "px";
+    lineHeightVal.textContent = Number(lineHeightEl.value).toFixed(1);
+    gradientAngleVal.textContent = gradientAngleEl.value + "\u00b0";
     textYVal.textContent = textYEl.value + "%";
     overlayVal.textContent = overlayEl.value + "%";
     overlayStartVal.textContent = overlayStartEl.value + "%";
+    strokeWidthVal.textContent = strokeWidthEl.value + "px";
+    shadowXVal.textContent = shadowXEl.value + "px";
+    shadowYVal.textContent = shadowYEl.value + "px";
+    shadowBlurVal.textContent = shadowBlurEl.value + "px";
   }
 
   function buildPresets() {
@@ -739,7 +912,10 @@
       var img = new Image();
       img.onload = function () {
         bgImage = img;
+        bgOffsetX = 0;
+        bgOffsetY = 0;
         bgName.textContent = file.name + " — " + img.naturalWidth + "\u00d7" + img.naturalHeight;
+        canvas.classList.add("can-drag");
         render();
       };
       img.onerror = function () {
@@ -776,10 +952,20 @@
     presetCjk.checked = false;
     c1.value = DEFAULTS.color1;
     c2.value = DEFAULTS.color2;
+    gradientAngleEl.value = DEFAULTS.gradientAngle;
     fontSizeEl.value = DEFAULTS.fontSize;
+    lineHeightEl.value = DEFAULTS.lineHeight;
     textYEl.value = DEFAULTS.textY;
     overlayEl.value = DEFAULTS.overlay;
     overlayStartEl.value = DEFAULTS.overlayStart;
+    strokeWidthEl.value = DEFAULTS.strokeWidth;
+    strokeColorEl.value = DEFAULTS.strokeColor;
+    shadowXEl.value = DEFAULTS.shadowX;
+    shadowYEl.value = DEFAULTS.shadowY;
+    shadowBlurEl.value = DEFAULTS.shadowBlur;
+    shadowColorEl.value = DEFAULTS.shadowColor;
+    bgOffsetX = 0;
+    bgOffsetY = 0;
 
     syncSliderLabels();
     updateCharCounts();
@@ -793,8 +979,11 @@
 
   clearBgBtn.addEventListener("click", function () {
     bgImage = null;
+    bgOffsetX = 0;
+    bgOffsetY = 0;
     bgInput.value = "";
     bgName.textContent = "No image — solid black";
+    canvas.classList.remove("can-drag");
     render();
   });
 
@@ -822,18 +1011,70 @@
     });
   });
 
-  [fontSizeEl, textYEl, overlayEl, overlayStartEl].forEach(function (input) {
+  [fontSizeEl, lineHeightEl, gradientAngleEl, textYEl, overlayEl, overlayStartEl, strokeWidthEl, shadowXEl, shadowYEl, shadowBlurEl].forEach(function (input) {
     input.addEventListener("input", function () {
       syncSliderLabels();
       renderDebounced();
     });
   });
 
+  [strokeColorEl, shadowColorEl].forEach(function (input) {
+    input.addEventListener("input", renderDebounced);
+  });
+
   downloadBtn.addEventListener("click", download);
   resetBtn.addEventListener("click", reset);
 
+  var dragState = null;
+
+  function canvasScale() {
+    var rect = canvas.getBoundingClientRect();
+    return {
+      x: rect.width ? W / rect.width : 1,
+      y: rect.height ? H / rect.height : 1
+    };
+  }
+
+  function isPannable() {
+    if (!bgImage) return false;
+    var r = coverRect(bgImage.naturalWidth, bgImage.naturalHeight, W, H);
+    return r.dw > W + 0.5 || r.dh > H + 0.5;
+  }
+
+  canvas.addEventListener("pointerdown", function (e) {
+    if (!isPannable()) return;
+    dragState = { id: e.pointerId, x: e.clientX, y: e.clientY, ox: bgOffsetX, oy: bgOffsetY };
+    canvas.setPointerCapture(e.pointerId);
+    canvas.classList.add("dragging");
+    e.preventDefault();
+  });
+
+  canvas.addEventListener("pointermove", function (e) {
+    if (!dragState) return;
+    var s = canvasScale();
+    bgOffsetX = dragState.ox + (e.clientX - dragState.x) * s.x;
+    bgOffsetY = dragState.oy + (e.clientY - dragState.y) * s.y;
+    render();
+  });
+
+  function endDrag(e) {
+    if (!dragState) return;
+    dragState = null;
+    canvas.classList.remove("dragging");
+    if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
+      canvas.releasePointerCapture(e.pointerId);
+    }
+  }
+
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
+
   buildPresets();
   reset();
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { render(); });
+  }
 
   document.addEventListener("dragover", function (e) { e.preventDefault(); });
   document.addEventListener("drop", function (e) {
