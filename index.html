@@ -451,11 +451,11 @@
       <div class="row">
         <div class="field">
           <label for="c1">Start</label>
-          <input type="color" id="c1" value="#ffd54f" />
+          <input type="color" id="c1" value="#fad126" />
         </div>
         <div class="field">
           <label for="c2">End</label>
-          <input type="color" id="c2" value="#ff3d00" />
+          <input type="color" id="c2" value="#ff544f" />
         </div>
       </div>
       <div class="field">
@@ -645,8 +645,8 @@
     line1: "BUILD AN APP",
     line2: "IN 10 MINUTES",
     line3: "",
-    color1: "#ffd54f",
-    color2: "#ff3d00",
+    color1: "#fad126",
+    color2: "#ff544f",
     gradientAngle: 90,
     fontSize: 96,
     lineHeight: 1.2,
@@ -662,7 +662,7 @@
   };
 
   var PRESETS = [
-    { name: "Sunset", from: "#ffd54f", to: "#ff3d00" },
+    { name: "Sunset", from: "#fad126", to: "#ff544f" },
     { name: "Ocean", from: "#4fc3f7", to: "#1565c0" },
     { name: "Lime", from: "#d4ff00", to: "#00a86b" },
     { name: "Bubblegum", from: "#ff8ad8", to: "#8e24aa" }
@@ -984,6 +984,7 @@
     syncSliderLabels();
     updateCharCounts();
     markActivePreset();
+    refreshSettingsStatus();
     render();
   }
 
@@ -1006,6 +1007,18 @@
       }
     });
     return true;
+  }
+
+  function refreshSettingsStatus() {
+    var saved = false;
+    try {
+      saved = !!localStorage.getItem(SETTINGS_KEY);
+    } catch (e) {
+      saved = false;
+    }
+    settingsStatus.textContent = saved
+      ? "Your saved settings load on every visit."
+      : "Settings are not saved yet.";
   }
 
   function saveSettings() {
