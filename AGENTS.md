@@ -43,7 +43,7 @@ Always Noto Sans TC (loaded from Google Fonts CDN). `FONT_FAMILY` and `FONT_WEIG
 | Text gradient | Color 1, Color 2, Angle (0–360°), 4 presets |
 | Stroke | Width (0–24px), color |
 | Shadow | X offset (−40..40), Y offset (−40..40), blur (0–60), color |
-| Adjust | Font size (20–120px), line height (1.0–3.0), text Y position, overlay opacity, overlay start |
+| Adjust | Font size (20–120px), line height (1.0–3.0), text X/Y position, overlay opacity, overlay start |
 | Export | Download PNG |
 
 ### Export

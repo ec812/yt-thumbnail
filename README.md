@@ -8,13 +8,13 @@ A single-file web app for composing YouTube thumbnails with layered compositing,
 
 - **Layers** — stack background, image, color, and text layers; reorder, show/hide, lock, and delete from the Layers panel
 - **Background layer** — upload any image, drag to reposition, cover-scaled to 1280×720, with adjustable overlay gradient
-- **Image layers** — add cutouts or overlays with position, scale, stroke, shadow, opacity, and blending mode; drag on canvas to move
+- **Image layers** — add cutouts or overlays with position, scale, stroke, shadow, opacity, blending mode, and clipping masks (circle, square, rectangle, triangle, custom crop); drag on canvas to move
 - **Color layers** — fill the whole canvas with a solid color, with adjustable opacity and 16 Photoshop-style blending modes (Multiply, Screen, Overlay, Color Dodge, Hard Light, Hue, Luminosity, …)
 - **AI background removal** — one-click cutout via `briaai/RMBG-1.4` (runs in browser, model cached after first download)
 - **Text layers** — 3 lines, Noto Sans TC font, with a 直播一會 checkbox preset (renders line 1 in solid white)
 - **Gradient text** — two-color linear gradient clipped to text glyphs, adjustable angle (0–360°), 4 presets
 - **Stroke & shadow** — per text and image layer
-- **Adjustments** — font size (20–120px), line height (1.0–3.0), vertical text position
+- **Adjustments** — font size (20–120px), line height (1.0–3.0), text X/Y position (or drag the text on the canvas)
 - **Save settings** — persist text/style controls to `localStorage` and auto-load on next visit
 - **Save & load project** — auto-save to `localStorage` plus manual Save, and Export/Import as a `.json` file
 - **Export** — download as 1280×720 PNG (all visible layers)
@@ -40,7 +40,7 @@ Out-of-the-box text styling (also restored by **Reset to defaults**):
 | Shadow | 0px / 0px offset, 3px blur, white |
 | Font size | 96px |
 | Line height | 1.2 |
-| Vertical position | 93% |
+| Position | X 0px, Y 211px |
 | Overlay darkness | 70% |
 | Overlay start | 65% |
 
@@ -53,7 +53,7 @@ Sample text: `BUILD AN APP` / `IN 10 MINUTES`
 3. Upload a background image (optional — defaults to solid black)
 4. Add **+ Image** or **+ Text** layers as needed
 5. For image layers, use **Remove background** to create a cutout (first run downloads ~45MB model)
-6. Drag image/background layers on the canvas to reposition
+6. Drag image/background/text layers on the canvas to reposition (hold **Shift** to lock the drag to one axis)
 7. Adjust gradient, stroke, shadow, and layout controls
 8. Click **Save settings** to remember your style preferences
 9. Click **Download** to save the thumbnail

@@ -18,6 +18,7 @@
     --accent: #ff544f;
     --accent-2: #fad126;
     --radius: 10px;
+    --selected: #dddddd;
   }
 
   * { box-sizing: border-box; }
@@ -120,6 +121,14 @@
   canvas#canvas.can-drag { cursor: grab; }
   canvas#canvas.dragging { cursor: grabbing; }
   canvas#canvas.eraser-mode { cursor: crosshair; }
+
+  canvas#cropOverlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
 
   .eraser-cursor {
     position: absolute;
@@ -318,9 +327,9 @@
     height: 16px;
     margin-top: -6px;
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--selected);
     border: 2px solid #10131a;
-    box-shadow: 0 0 0 1px var(--accent);
+    box-shadow: 0 0 0 1px var(--selected);
   }
 
   input[type="range"]::-moz-range-thumb {
@@ -376,8 +385,8 @@
   .preset:active { transform: scale(0.98); }
 
   .preset.active {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
+    border-color: var(--selected);
+    box-shadow: 0 0 0 1px var(--selected);
   }
 
   .swatch {
@@ -405,8 +414,8 @@
   button.primary {
     width: 100%;
     /* // gradient angle at 90 deg  */
-    background: linear-gradient(0deg, var(--accent), var(--accent-2)) ;
-    color: white;
+    background: #ccc ;
+    color: black;
     border: none;
     border-radius: 9px;
     padding: 13px 16px;
@@ -414,7 +423,7 @@
     font-weight: 800;
     font-family: inherit;
     cursor: pointer;
-    letter-spacing: 0.2px;
+    letter-spacing: -0.2px;
     transition: filter 0.15s, transform 0.1s;
   }
 
@@ -522,8 +531,8 @@
   .layer-row:hover { border-color: #3d4757; }
 
   .layer-row.active {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
+    border-color: var(--selected);
+    box-shadow: 0 0 0 1px var(--selected);
   }
 
   .layer-row.is-hidden .layer-name { opacity: 0.4; }
@@ -617,6 +626,7 @@
     </div>
     <div class="canvas-wrap">
       <canvas id="canvas" width="1280" height="720"></canvas>
+      <canvas id="cropOverlay" width="1280" height="720"></canvas>
       <div class="eraser-cursor" id="eraserCursor"></div>
     </div>
     <p class="hint">Pick a layer in the <strong>Layers</strong> panel to edit it. An image or background layer can be <strong>dragged on the canvas</strong>. Export gives you an exact 1280&times;720 PNG of every visible layer.</p>
@@ -784,12 +794,21 @@
         </div>
         <input type="range" id="lineHeight" min="1" max="3" step="0.1" value="1.2" />
       </div>
-      <div class="field">
-        <div class="label-row">
-          <label for="textY">Vertical position</label>
-          <span class="value" id="textYVal">92%</span>
+      <div class="row">
+        <div class="field">
+          <div class="label-row">
+            <label for="textX">Position X</label>
+            <span class="value" id="textXVal">0px</span>
+          </div>
+          <input type="range" id="textX" min="-640" max="640" step="1" value="0" />
         </div>
-        <input type="range" id="textY" min="0" max="100" step="1" value="93" />
+        <div class="field">
+          <div class="label-row">
+            <label for="textY">Position Y</label>
+            <span class="value" id="textYVal">211px</span>
+          </div>
+          <input type="range" id="textY" min="-360" max="360" step="1" value="211" />
+        </div>
       </div>
     </fieldset>
 
@@ -809,6 +828,11 @@
         <label for="imgBlend">Blending mode</label>
         <select id="imgBlend"></select>
       </div>
+      <div class="field">
+        <label for="imgClip">Clipping</label>
+        <select id="imgClip"></select>
+      </div>
+      <div class="meta" id="cropHint" style="display:none">Drag the corner handles on the canvas to set the crop region.</div>
       <div class="field">
         <div class="label-row">
           <label for="imgX">Position X</label>
@@ -945,6 +969,8 @@
 
   var canvas = document.getElementById("canvas");
   var ctx = canvas.getContext("2d");
+  var cropOverlay = document.getElementById("cropOverlay");
+  var cropCtx = cropOverlay.getContext("2d");
 
   var bgInput = document.getElementById("bgInput");
   var bgName = document.getElementById("bgName");
@@ -966,6 +992,8 @@
   var fontSizeVal = document.getElementById("fontSizeVal");
   var lineHeightEl = document.getElementById("lineHeight");
   var lineHeightVal = document.getElementById("lineHeightVal");
+  var textXEl = document.getElementById("textX");
+  var textXVal = document.getElementById("textXVal");
   var textYEl = document.getElementById("textY");
   var textYVal = document.getElementById("textYVal");
   var overlayEl = document.getElementById("overlay");
@@ -1006,6 +1034,8 @@
   var imgOpacityEl = document.getElementById("imgOpacity");
   var imgOpacityVal = document.getElementById("imgOpacityVal");
   var imgBlendEl = document.getElementById("imgBlend");
+  var imgClipEl = document.getElementById("imgClip");
+  var cropHintEl = document.getElementById("cropHint");
   var eraserToggleBtn = document.getElementById("eraserToggle");
   var eraserDoneBtn = document.getElementById("eraserDone");
   var eraserHint = document.getElementById("eraserHint");
@@ -1042,7 +1072,7 @@
   var SETTINGS_FIELDS = [
     "line1", "line2", "line3", "presetCjk",
     "c1", "c2", "gradientAngle",
-    "fontSize", "lineHeight", "textY",
+    "fontSize", "lineHeight", "textX", "textY",
     "overlay", "overlayStart",
     "strokeWidth", "strokeColor",
     "shadowX", "shadowY", "shadowBlur", "shadowColor"
@@ -1057,7 +1087,10 @@
     gradientAngle: 90,
     fontSize: 96,
     lineHeight: 1.2,
-    textY: 93,
+    // text position is an offset in canvas pixels from the block's centred
+    // position; the default Y keeps the classic "sits low" placement
+    textX: 0,
+    textY: 211,
     overlay: 70,
     overlayStart: 65,
     strokeWidth: 8,
@@ -1095,13 +1128,31 @@
     { name: "Luminosity", value: "luminosity" }
   ];
 
-  function buildBlendOptions(select) {
-    BLEND_MODES.forEach(function (m) {
+  function fillSelect(select, items) {
+    items.forEach(function (item) {
       var opt = document.createElement("option");
-      opt.value = m.value;
-      opt.textContent = m.name;
+      opt.value = item.value;
+      opt.textContent = item.name;
       select.appendChild(opt);
     });
+  }
+
+  function buildBlendOptions(select) {
+    fillSelect(select, BLEND_MODES);
+  }
+
+  // clipping masks available on image layers
+  var CLIP_SHAPES = [
+    { name: "None", value: "none" },
+    { name: "Circle", value: "circle" },
+    { name: "Square", value: "square" },
+    { name: "Rectangle", value: "rectangle" },
+    { name: "Triangle", value: "triangle" },
+    { name: "Custom Crop", value: "custom" }
+  ];
+
+  function buildClipOptions(select) {
+    fillSelect(select, CLIP_SHAPES);
   }
 
   var ICONS = {
@@ -1183,7 +1234,8 @@
       gradientAngle: DEFAULTS.gradientAngle,
       fontSize: DEFAULTS.fontSize,
       lineHeight: DEFAULTS.lineHeight,
-      textY: DEFAULTS.textY,
+      x: DEFAULTS.textX,
+      y: DEFAULTS.textY,
       strokeWidth: DEFAULTS.strokeWidth,
       strokeColor: DEFAULTS.strokeColor,
       shadowX: DEFAULTS.shadowX,
@@ -1214,6 +1266,8 @@
       eraseRadius: 20,
       opacity: 100,
       blendMode: "source-over",
+      clipShape: "none",
+      cropRect: { x: 0, y: 0, w: 1, h: 1 },
       busy: false
     };
   }
@@ -1327,16 +1381,109 @@
     return cache.canvas;
   }
 
-  function drawImageLayer(layer) {
-    if (!layer.image) return;
-
+  function imageDestRect(layer) {
     var iw = imgW(layer.image);
     var ih = imgH(layer.image);
     var s = Number(layer.scale) || 1;
     var dw = iw * s;
     var dh = ih * s;
-    var dx = (W - dw) / 2 + Number(layer.x || 0);
-    var dy = (H - dh) / 2 + Number(layer.y || 0);
+    return {
+      dx: (W - dw) / 2 + Number(layer.x || 0),
+      dy: (H - dh) / 2 + Number(layer.y || 0),
+      dw: dw,
+      dh: dh
+    };
+  }
+
+  function defaultCropRect() {
+    return { x: 0, y: 0, w: 1, h: 1 };
+  }
+
+  // crop rect is stored normalized (0..1) against the image's drawn bounds
+  function normalizedCropRect(layer) {
+    var r = layer.cropRect;
+    if (!r) return defaultCropRect();
+    var x = Math.max(0, Math.min(1, Number(r.x) || 0));
+    var y = Math.max(0, Math.min(1, Number(r.y) || 0));
+    var w = Math.max(0.02, Math.min(1 - x, Number(r.w) || 1));
+    var h = Math.max(0.02, Math.min(1 - y, Number(r.h) || 1));
+    return { x: x, y: y, w: w, h: h };
+  }
+
+  function hasClipShape(layer) {
+    return !!(layer.clipShape && layer.clipShape !== "none");
+  }
+
+  // builds the clip path for a layer on an arbitrary context
+  function buildClipPath(target, layer, r) {
+    var shape = layer.clipShape;
+    target.beginPath();
+    if (shape === "circle") {
+      // ellipse inscribed in the image bounds
+      target.ellipse(r.dx + r.dw / 2, r.dy + r.dh / 2, r.dw / 2, r.dh / 2, 0, 0, Math.PI * 2);
+    } else if (shape === "square") {
+      // largest square centered in the image bounds
+      var side = Math.min(r.dw, r.dh);
+      target.rect(r.dx + (r.dw - side) / 2, r.dy + (r.dh - side) / 2, side, side);
+    } else if (shape === "triangle") {
+      // largest equilateral triangle inscribed in the image bounds
+      var ts = Math.min(r.dw, (r.dh * 2) / Math.sqrt(3));
+      var th = (ts * Math.sqrt(3)) / 2;
+      var tcx = r.dx + r.dw / 2;
+      var top = r.dy + (r.dh - th) / 2;
+      target.moveTo(tcx, top);
+      target.lineTo(tcx + ts / 2, top + th);
+      target.lineTo(tcx - ts / 2, top + th);
+      target.closePath();
+    } else if (shape === "custom") {
+      var c = normalizedCropRect(layer);
+      target.rect(r.dx + c.x * r.dw, r.dy + c.y * r.dh, c.w * r.dw, c.h * r.dh);
+    } else {
+      // "rectangle": the image's own native aspect ratio, centered
+      target.rect(r.dx, r.dy, r.dw, r.dh);
+    }
+  }
+
+  // the clip path has to be applied offscreen for shadows: a shadow drawn
+  // inside a clip is itself clipped away, so the masked image is rendered
+  // first and that result is what casts the shadow
+  function clippedImageCanvas(layer, r) {
+    var crop = layer.cropRect;
+    var key = [layer.clipShape, r.dx, r.dy, r.dw, r.dh,
+               crop ? [crop.x, crop.y, crop.w, crop.h].join(",") : "default"].join("|");
+
+    var cache = layer._clipCache;
+    if (cache && cache.img === layer.image && cache.key === key) return cache.canvas;
+
+    var cv = document.createElement("canvas");
+    cv.width = W;
+    cv.height = H;
+    var g = cv.getContext("2d");
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = "high";
+    g.save();
+    buildClipPath(g, layer, r);
+    g.clip();
+    g.drawImage(layer.image, r.dx, r.dy, r.dw, r.dh);
+    g.restore();
+
+    layer._clipCache = { img: layer.image, key: key, canvas: cv };
+    return cv;
+  }
+
+  function drawImageLayer(layer) {
+    if (!layer.image) return;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
+    var r = imageDestRect(layer);
+
+    if (!hasClipShape(layer)) {
+      // unclipped: stroke and shadow follow the image's own silhouette
+      drawImageLayerContent(layer, r);
+      return;
+    }
 
     var strokeWidth = Math.max(0, Number(layer.strokeWidth) || 0);
     var shadowX = Number(layer.shadowX) || 0;
@@ -1344,8 +1491,51 @@
     var shadowBlur = Number(layer.shadowBlur) || 0;
     var hasShadow = shadowBlur > 0 || shadowX !== 0 || shadowY !== 0;
 
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
+    // a shadow has to be cast by the already-masked image, otherwise the
+    // clip removes it along with everything outside the shape
+    var masked = hasShadow ? clippedImageCanvas(layer, r) : null;
+
+    if (masked) {
+      ctx.save();
+      applyShadow(shadowX, shadowY, shadowBlur, layer.shadowColor);
+      ctx.drawImage(masked, 0, 0);
+      ctx.restore();
+    }
+
+    // stroke the clip shape itself; the image drawn after covers its inner half
+    if (strokeWidth > 0) {
+      buildClipPath(ctx, layer, r);
+      ctx.save();
+      ctx.lineWidth = strokeWidth * 2;
+      ctx.strokeStyle = layer.strokeColor || "#000000";
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (masked) {
+      ctx.drawImage(masked, 0, 0);
+    } else {
+      ctx.save();
+      buildClipPath(ctx, layer, r);
+      ctx.clip();
+      ctx.drawImage(layer.image, r.dx, r.dy, r.dw, r.dh);
+      ctx.restore();
+    }
+  }
+
+  function drawImageLayerContent(layer, r) {
+    var dx = r.dx;
+    var dy = r.dy;
+    var dw = r.dw;
+    var dh = r.dh;
+
+    var strokeWidth = Math.max(0, Number(layer.strokeWidth) || 0);
+    var shadowX = Number(layer.shadowX) || 0;
+    var shadowY = Number(layer.shadowY) || 0;
+    var shadowBlur = Number(layer.shadowBlur) || 0;
+    var hasShadow = shadowBlur > 0 || shadowX !== 0 || shadowY !== 0;
 
     if (strokeWidth <= 0 && !hasShadow) {
       ctx.drawImage(layer.image, dx, dy, dw, dh);
@@ -1376,6 +1566,120 @@
   function drawColorLayer(layer) {
     ctx.fillStyle = layer.color || "#ff0000";
     ctx.fillRect(0, 0, W, H);
+  }
+
+  /* ---------------- Custom crop overlay ---------------- */
+
+  var CROP_HANDLE_HALF = 10; // canvas pixels
+  var CORNER_CURSORS = { tl: "nwse-resize", br: "nwse-resize", tr: "nesw-resize", bl: "nesw-resize" };
+  var cropDrag = null;
+
+  function cropOverlayRect() {
+    var layer = selectedLayer;
+    if (!layer || layer.type !== "image" || !layer.image || layer.clipShape !== "custom") return null;
+    var r = imageDestRect(layer);
+    var c = normalizedCropRect(layer);
+    return {
+      dx: r.dx + c.x * r.dw,
+      dy: r.dy + c.y * r.dh,
+      dw: c.w * r.dw,
+      dh: c.h * r.dh
+    };
+  }
+
+  function cropCorners(rect) {
+    return {
+      tl: { x: rect.dx, y: rect.dy },
+      tr: { x: rect.dx + rect.dw, y: rect.dy },
+      bl: { x: rect.dx, y: rect.dy + rect.dh },
+      br: { x: rect.dx + rect.dw, y: rect.dy + rect.dh }
+    };
+  }
+
+  function drawCropOverlay() {
+    cropCtx.setTransform(1, 0, 0, 1, 0, 0);
+    cropCtx.clearRect(0, 0, W, H);
+
+    var rect = cropOverlayRect();
+    if (!rect) return;
+
+    // dim everything outside the crop region
+    cropCtx.save();
+    cropCtx.fillStyle = "rgba(0, 0, 0, 0.45)";
+    cropCtx.beginPath();
+    cropCtx.rect(0, 0, W, H);
+    cropCtx.rect(rect.dx, rect.dy, rect.dw, rect.dh);
+    cropCtx.fill("evenodd");
+    cropCtx.restore();
+
+    cropCtx.save();
+    cropCtx.lineWidth = 2;
+    cropCtx.strokeStyle = "#ffffff";
+    cropCtx.strokeRect(rect.dx, rect.dy, rect.dw, rect.dh);
+
+    var corners = cropCorners(rect);
+    for (var key in corners) {
+      var p = corners[key];
+      cropCtx.fillStyle = "#ffffff";
+      cropCtx.strokeStyle = "#10131a";
+      cropCtx.beginPath();
+      cropCtx.rect(p.x - CROP_HANDLE_HALF, p.y - CROP_HANDLE_HALF, CROP_HANDLE_HALF * 2, CROP_HANDLE_HALF * 2);
+      cropCtx.fill();
+      cropCtx.stroke();
+    }
+    cropCtx.restore();
+  }
+
+  function cropCornerAt(pos) {
+    var rect = cropOverlayRect();
+    if (!rect) return null;
+    var corners = cropCorners(rect);
+    var s = canvasScale();
+    var hit = CROP_HANDLE_HALF * 1.8 * Math.max(s.x, s.y);
+    var best = null;
+    var bestDist = hit;
+    for (var key in corners) {
+      var p = corners[key];
+      var d = Math.sqrt((pos.x - p.x) * (pos.x - p.x) + (pos.y - p.y) * (pos.y - p.y));
+      if (d <= bestDist) { bestDist = d; best = key; }
+    }
+    return best;
+  }
+
+  function updateCropFromPointer(pos) {
+    if (!cropDrag) return;
+    var layer = cropDrag.layer;
+    var r = imageDestRect(layer);
+    if (!r.dw || !r.dh) return;
+
+    var nx = Math.max(0, Math.min(1, (pos.x - r.dx) / r.dw));
+    var ny = Math.max(0, Math.min(1, (pos.y - r.dy) / r.dh));
+    var c = cropDrag.rect;
+    var MIN = 0.05;
+
+    if (cropDrag.corner === "tl") {
+      var right = c.x + c.w;
+      var bottom = c.y + c.h;
+      c.x = Math.min(nx, right - MIN);
+      c.y = Math.min(ny, bottom - MIN);
+      c.w = right - c.x;
+      c.h = bottom - c.y;
+    } else if (cropDrag.corner === "tr") {
+      var bottomT = c.y + c.h;
+      c.y = Math.min(ny, bottomT - MIN);
+      c.w = Math.max(MIN, nx - c.x);
+      c.h = bottomT - c.y;
+    } else if (cropDrag.corner === "bl") {
+      var rightB = c.x + c.w;
+      c.x = Math.min(nx, rightB - MIN);
+      c.w = rightB - c.x;
+      c.h = Math.max(MIN, ny - c.y);
+    } else if (cropDrag.corner === "br") {
+      c.w = Math.max(MIN, nx - c.x);
+      c.h = Math.max(MIN, ny - c.y);
+    }
+
+    layer.cropRect = { x: c.x, y: c.y, w: c.w, h: c.h };
   }
 
   function drawOverlayPass() {
@@ -1455,10 +1759,9 @@
     var fontSize = Number(layer.fontSize);
     var lineHeight = Math.max(1, Math.round(fontSize * Number(layer.lineHeight)));
     var blockHeight = lineHeight * textLines.length;
-    var pos = Number(layer.textY) / 100;
-
-    var maxTop = Math.max(0, H - blockHeight);
-    var blockTop = Math.round(maxTop * pos);
+    var offsetX = Number(layer.x) || 0;
+    var offsetY = Number(layer.y) || 0;
+    var blockTop = Math.round((H - blockHeight) / 2 + offsetY);
 
     var strokeWidth = Number(layer.strokeWidth);
     var shadowX = Number(layer.shadowX);
@@ -1471,11 +1774,11 @@
     for (var i = 0; i < textLines.length; i++) {
       var line = textLines[i];
       var y = blockTop + i * lineHeight;
-      var centerX = W / 2;
+      var centerX = W / 2 + offsetX;
       var centerY = y + lineHeight / 2;
 
       var result = gradientClippedLine(line, fontSize, layer.color1, layer.color2, lineHeight, angle, whiteFirstLine && i === 0);
-      var x = Math.round((W - result.width) / 2);
+      var x = Math.round(centerX - result.width / 2);
 
       if (strokeWidth > 0) {
         ctx.save();
@@ -1544,6 +1847,7 @@
       drawTextLayer(layer);
     }
 
+    drawCropOverlay();
     scheduleAutoSave();
   }
 
@@ -1571,7 +1875,8 @@
     fontSizeVal.textContent = fontSizeEl.value + "px";
     lineHeightVal.textContent = Number(lineHeightEl.value).toFixed(1);
     gradientAngleVal.textContent = gradientAngleEl.value + "\u00b0";
-    textYVal.textContent = textYEl.value + "%";
+    textXVal.textContent = textXEl.value + "px";
+    textYVal.textContent = textYEl.value + "px";
     overlayVal.textContent = overlayEl.value + "%";
     overlayStartVal.textContent = overlayStartEl.value + "%";
     strokeWidthVal.textContent = strokeWidthEl.value + "px";
@@ -1593,6 +1898,8 @@
     imgEraseRadiusEl.value = Number(layer.eraseRadius) || 20;
     imgOpacityEl.value = layer.opacity === undefined ? 100 : layer.opacity;
     imgBlendEl.value = layer.blendMode || "source-over";
+    imgClipEl.value = layer.clipShape || "none";
+    cropHintEl.style.display = imgClipEl.value === "custom" ? "" : "none";
     syncImageLabels();
   }
 
@@ -1608,6 +1915,13 @@
     imgOpacityVal.textContent = imgOpacityEl.value + "%";
   }
 
+  function syncTextPosition(layer) {
+    textXEl.value = Math.round(Number(layer.x) || 0);
+    textYEl.value = Math.round(Number(layer.y) || 0);
+    textXVal.textContent = textXEl.value + "px";
+    textYVal.textContent = textYEl.value + "px";
+  }
+
   function syncControlsFromLayer(layer) {
     if (!layer) return;
 
@@ -1621,7 +1935,7 @@
       gradientAngleEl.value = layer.gradientAngle;
       fontSizeEl.value = layer.fontSize;
       lineHeightEl.value = layer.lineHeight;
-      textYEl.value = layer.textY;
+      syncTextPosition(layer);
       strokeWidthEl.value = layer.strokeWidth;
       strokeColorEl.value = layer.strokeColor;
       shadowXEl.value = layer.shadowX;
@@ -1664,7 +1978,8 @@
       layer.gradientAngle = Number(gradientAngleEl.value);
       layer.fontSize = Number(fontSizeEl.value);
       layer.lineHeight = Number(lineHeightEl.value);
-      layer.textY = Number(textYEl.value);
+      layer.x = Number(textXEl.value);
+      layer.y = Number(textYEl.value);
       layer.strokeWidth = Number(strokeWidthEl.value);
       layer.strokeColor = strokeColorEl.value;
       layer.shadowX = Number(shadowXEl.value);
@@ -1687,6 +2002,7 @@
       layer.eraseRadius = Number(imgEraseRadiusEl.value);
       layer.opacity = Number(imgOpacityEl.value);
       layer.blendMode = imgBlendEl.value;
+      layer.clipShape = imgClipEl.value;
     } else if (layer.type === "color") {
       layer.color = colorValueEl.value;
       layer.opacity = Number(colorOpacityEl.value);
@@ -1820,6 +2136,7 @@
     updatePanelVisibility();
     syncControlsFromLayer(layer);
     updateCanvasCursor();
+    drawCropOverlay();
   }
 
   function reorderLayer(dragId, targetId) {
@@ -2007,6 +2324,7 @@
     gradientAngleEl.value = DEFAULTS.gradientAngle;
     fontSizeEl.value = DEFAULTS.fontSize;
     lineHeightEl.value = DEFAULTS.lineHeight;
+    textXEl.value = DEFAULTS.textX;
     textYEl.value = DEFAULTS.textY;
     overlayEl.value = DEFAULTS.overlay;
     overlayStartEl.value = DEFAULTS.overlayStart;
@@ -2028,6 +2346,8 @@
     imgEraseRadiusEl.value = 20;
     imgOpacityEl.value = 100;
     imgBlendEl.value = "source-over";
+    imgClipEl.value = "none";
+    cropHintEl.style.display = "none";
     colorValueEl.value = "#ff0000";
     colorOpacityEl.value = 100;
     colorBlendEl.value = "source-over";
@@ -2282,6 +2602,7 @@
     if (!selectedLayer || selectedLayer.locked) return null;
     if (selectedLayer.type === "background") return isPannable(selectedLayer) ? selectedLayer : null;
     if (selectedLayer.type === "image") return selectedLayer.image ? selectedLayer : null;
+    if (selectedLayer.type === "text") return selectedLayer;
     return null;
   }
 
@@ -2294,6 +2615,21 @@
   }
 
   canvas.addEventListener("pointerdown", function (e) {
+    var cropCorner = cropCornerAt(pointerCanvasPos(e));
+    if (cropCorner) {
+      pushUndo();
+      cropDrag = {
+        layer: selectedLayer,
+        corner: cropCorner,
+        id: e.pointerId,
+        rect: normalizedCropRect(selectedLayer)
+      };
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = CORNER_CURSORS[cropCorner];
+      e.preventDefault();
+      return;
+    }
+
     if (eraserLayer) {
       if (!eraserLayer.eraseCanvas) return;
       pushUndo();
@@ -2327,12 +2663,28 @@
       return;
     }
 
-    if (!dragState) return;
+    if (cropDrag) {
+      updateCropFromPointer(pointerCanvasPos(e));
+      render();
+      return;
+    }
+
+    if (!dragState) {
+      var hoverCorner = cropCornerAt(pointerCanvasPos(e));
+      canvas.style.cursor = hoverCorner ? CORNER_CURSORS[hoverCorner] : "";
+      return;
+    }
 
     var s = canvasScale();
     var dx = (e.clientX - dragState.x) * s.x;
     var dy = (e.clientY - dragState.y) * s.y;
     var layer = dragState.layer;
+
+    // holding shift locks the drag to one axis: whichever has moved further
+    if (e.shiftKey) {
+      if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
+      else dx = 0;
+    }
 
     if (layer.type === "background") {
       var r = coverRect(imgW(layer.image), imgH(layer.image), W, H);
@@ -2345,17 +2697,31 @@
     } else {
       layer.x = dragState.ox + dx;
       layer.y = dragState.oy + dy;
-      if (selectedLayer === layer) syncImageControls(layer);
+      if (selectedLayer === layer) {
+        if (layer.type === "text") syncTextPosition(layer);
+        else syncImageControls(layer);
+      }
     }
 
     render();
   });
 
   function endDrag(e) {
+    if (cropDrag) {
+      cropDrag = null;
+      canvas.style.cursor = "";
+      if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
+        canvas.releasePointerCapture(e.pointerId);
+      }
+      render();
+      return;
+    }
+
     if (eraseState) {
       var erased = eraseState.layer;
       eraseState = null;
       erased._outline = null;
+      erased._clipCache = null;
       if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
         canvas.releasePointerCapture(e.pointerId);
       }
@@ -2375,6 +2741,7 @@
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("pointerleave", function () {
     if (eraserLayer && !eraseState) hideEraserCursor();
+    canvas.style.cursor = "";
   });
 
   /* ---------------- Eraser ---------------- */
@@ -2398,6 +2765,7 @@
     layer.image = editable;
     layer.src = null;
     layer._outline = null;
+    layer._clipCache = null;
     return editable;
   }
 
@@ -2447,6 +2815,7 @@
 
     eraseState.prevX = nx;
     eraseState.prevY = ny;
+    layer._clipCache = null;
     render();
   }
 
@@ -2489,6 +2858,7 @@
   function exitEraser() {
     if (!eraserLayer) return;
     eraserLayer._outline = null;
+    eraserLayer._clipCache = null;
     eraserLayer = null;
     eraseState = null;
     lastEraseClient = null;
@@ -2518,7 +2888,7 @@
   function cloneLayer(layer) {
     var copy = {};
     for (var key in layer) {
-      if (key === "_outline") continue;
+      if (key === "_outline" || key === "_clipCache") continue;
       copy[key] = layer[key];
     }
     copy.busy = false;
@@ -2580,7 +2950,8 @@
           s.gradientAngle = layer.gradientAngle;
           s.fontSize = layer.fontSize;
           s.lineHeight = layer.lineHeight;
-          s.textY = layer.textY;
+          s.x = layer.x;
+          s.y = layer.y;
           s.strokeWidth = layer.strokeWidth;
           s.strokeColor = layer.strokeColor;
           s.shadowX = layer.shadowX;
@@ -2598,6 +2969,8 @@
           s.eraseRadius = layer.eraseRadius;
           s.opacity = layer.opacity === undefined ? 100 : layer.opacity;
           s.blendMode = layer.blendMode || "source-over";
+          s.clipShape = layer.clipShape || "none";
+          if (s.clipShape === "custom") s.cropRect = normalizedCropRect(layer);
         }
         if (layer.type === "color") {
           s.color = layer.color;
@@ -2669,7 +3042,8 @@
         layer.gradientAngle = s.gradientAngle !== undefined ? s.gradientAngle : DEFAULTS.gradientAngle;
         layer.fontSize = s.fontSize || DEFAULTS.fontSize;
         layer.lineHeight = s.lineHeight || DEFAULTS.lineHeight;
-        layer.textY = s.textY !== undefined ? s.textY : DEFAULTS.textY;
+        layer.x = s.x !== undefined ? s.x : DEFAULTS.textX;
+        layer.y = s.y !== undefined ? s.y : DEFAULTS.textY;
         layer.strokeWidth = s.strokeWidth || 0;
         layer.strokeColor = s.strokeColor || "#000000";
         layer.shadowX = s.shadowX || 0;
@@ -2688,6 +3062,13 @@
         layer.eraseRadius = s.eraseRadius || 20;
         layer.opacity = s.opacity !== undefined ? s.opacity : 100;
         layer.blendMode = s.blendMode || "source-over";
+        layer.clipShape = s.clipShape || "none";
+        layer.cropRect = s.cropRect ? {
+          x: Number(s.cropRect.x) || 0,
+          y: Number(s.cropRect.y) || 0,
+          w: s.cropRect.w === undefined ? 1 : Number(s.cropRect.w),
+          h: s.cropRect.h === undefined ? 1 : Number(s.cropRect.h)
+        } : defaultCropRect();
       }
 
       if (s.type === "color") {
@@ -3025,7 +3406,8 @@
   bindTextSlider(gradientAngleEl, "gradientAngle");
   bindTextSlider(fontSizeEl, "fontSize");
   bindTextSlider(lineHeightEl, "lineHeight");
-  bindTextSlider(textYEl, "textY");
+  bindTextSlider(textXEl, "x");
+  bindTextSlider(textYEl, "y");
   bindTextSlider(strokeWidthEl, "strokeWidth");
   bindTextSlider(shadowXEl, "shadowX");
   bindTextSlider(shadowYEl, "shadowY");
@@ -3123,6 +3505,18 @@
     render();
   });
 
+  imgClipEl.addEventListener("change", function () {
+    if (selectedLayer && selectedLayer.type === "image") {
+      pushUndo();
+      selectedLayer.clipShape = imgClipEl.value;
+      if (selectedLayer.clipShape === "custom" && !selectedLayer.cropRect) {
+        selectedLayer.cropRect = defaultCropRect();
+      }
+    }
+    cropHintEl.style.display = imgClipEl.value === "custom" ? "" : "none";
+    render();
+  });
+
   colorValueEl.addEventListener("input", function () {
     if (selectedLayer && selectedLayer.type === "color") {
       beginEdit();
@@ -3210,6 +3604,7 @@
 
   buildBlendOptions(imgBlendEl);
   buildBlendOptions(colorBlendEl);
+  buildClipOptions(imgClipEl);
   buildPresets();
   reset();
   loadSavedSettings();
