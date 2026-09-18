@@ -96,6 +96,17 @@
 
   canvas#canvas.can-drag { cursor: grab; }
   canvas#canvas.dragging { cursor: grabbing; }
+  canvas#canvas.eraser-mode { cursor: crosshair; }
+
+  .eraser-cursor {
+    position: absolute;
+    border: 1px solid rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.65);
+    pointer-events: none;
+    display: none;
+    z-index: 2;
+  }
 
   .hint {
     margin-top: 10px;
@@ -147,6 +158,8 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .row {
@@ -370,6 +383,12 @@
   button.ghost:hover { color: var(--text); border-color: #3d4757; }
   button.ghost:disabled { opacity: 0.5; cursor: default; }
 
+  button.ghost.active {
+    color: var(--text);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
   .divider {
     height: 1px;
     background: var(--border);
@@ -518,6 +537,7 @@
     </div>
     <div class="canvas-wrap">
       <canvas id="canvas" width="1280" height="720"></canvas>
+      <div class="eraser-cursor" id="eraserCursor"></div>
     </div>
     <p class="hint">Pick a layer in the <strong>Layers</strong> panel to edit it. An image or background layer can be <strong>dragged on the canvas</strong>. Export gives you an exact 1280&times;720 PNG of every visible layer.</p>
   </main>
@@ -760,6 +780,17 @@
       <div class="divider"></div>
       <button class="ghost" type="button" id="removeBg">Remove background</button>
       <div class="meta" id="aiStatus"></div>
+      <div class="divider"></div>
+      <div class="field">
+        <div class="label-row">
+          <label for="imgEraseRadius">Eraser radius</label>
+          <span class="value" id="imgEraseRadiusVal">20px</span>
+        </div>
+        <input type="range" id="imgEraseRadius" min="1" max="100" step="1" value="20" />
+      </div>
+      <button class="ghost" type="button" id="eraserToggle">Eraser</button>
+      <button class="ghost" type="button" id="eraserDone" style="display:none">Done</button>
+      <div class="meta" id="eraserHint" style="display:none">Draw on the canvas to erase parts of this layer.</div>
     </fieldset>
 
     <div class="divider" data-for="image"></div>
@@ -846,6 +877,12 @@
   var imgShadowBlurEl = document.getElementById("imgShadowBlur");
   var imgShadowBlurVal = document.getElementById("imgShadowBlurVal");
   var imgShadowColorEl = document.getElementById("imgShadowColor");
+  var imgEraseRadiusEl = document.getElementById("imgEraseRadius");
+  var imgEraseRadiusVal = document.getElementById("imgEraseRadiusVal");
+  var eraserToggleBtn = document.getElementById("eraserToggle");
+  var eraserDoneBtn = document.getElementById("eraserDone");
+  var eraserHint = document.getElementById("eraserHint");
+  var eraserCursor = document.getElementById("eraserCursor");
   var imageMeta = document.getElementById("imageMeta");
   var removeBgBtn = document.getElementById("removeBg");
   var aiStatus = document.getElementById("aiStatus");
@@ -1004,6 +1041,7 @@
       shadowY: 0,
       shadowBlur: 0,
       shadowColor: "#000000",
+      eraseRadius: 20,
       busy: false
     };
   }
@@ -1350,6 +1388,7 @@
     imgShadowYEl.value = Number(layer.shadowY) || 0;
     imgShadowBlurEl.value = Number(layer.shadowBlur) || 0;
     imgShadowColorEl.value = layer.shadowColor || "#000000";
+    imgEraseRadiusEl.value = Number(layer.eraseRadius) || 20;
     syncImageLabels();
   }
 
@@ -1361,6 +1400,7 @@
     imgShadowXVal.textContent = imgShadowXEl.value + "px";
     imgShadowYVal.textContent = imgShadowYEl.value + "px";
     imgShadowBlurVal.textContent = imgShadowBlurEl.value + "px";
+    imgEraseRadiusVal.textContent = imgEraseRadiusEl.value + "px";
   }
 
   function syncControlsFromLayer(layer) {
@@ -1392,6 +1432,7 @@
         : "No image \u2014 solid black";
     } else if (layer.type === "image") {
       syncImageControls(layer);
+      eraserToggleBtn.disabled = !layer.image;
       imageMeta.textContent = layer.image
         ? (layer.name + " \u2014 " + imgW(layer.image) + "\u00d7" + imgH(layer.image))
         : "No image";
@@ -1433,6 +1474,7 @@
       layer.shadowY = Number(imgShadowYEl.value);
       layer.shadowBlur = Number(imgShadowBlurEl.value);
       layer.shadowColor = imgShadowColorEl.value;
+      layer.eraseRadius = Number(imgEraseRadiusEl.value);
     }
   }
 
@@ -1555,6 +1597,7 @@
 
   function selectLayer(layer) {
     if (!layer) return;
+    if (eraserLayer && eraserLayer !== layer) exitEraser();
     selectedLayer = layer;
     refreshLayerPanel();
     updatePanelVisibility();
@@ -1582,6 +1625,7 @@
     var index = layers.indexOf(layer);
     if (index < 0) return;
     if (layer.image && !window.confirm('Delete layer "' + (layer.name || layer.type) + '"?')) return;
+    if (eraserLayer === layer) exitEraser();
 
     layers.splice(index, 1);
     if (selectedLayer === layer) selectedLayer = layers[Math.min(index, layers.length - 1)];
@@ -1745,6 +1789,7 @@
     imgShadowYEl.value = 0;
     imgShadowBlurEl.value = 0;
     imgShadowColorEl.value = "#000000";
+    imgEraseRadiusEl.value = 20;
     bgInput.value = "";
     bgName.textContent = "No image \u2014 solid black";
     aiStatus.textContent = "";
@@ -1992,10 +2037,23 @@
   }
 
   function updateCanvasCursor() {
+    if (eraserLayer) {
+      canvas.classList.remove("can-drag");
+      return;
+    }
     canvas.classList.toggle("can-drag", !!getDragTarget());
   }
 
   canvas.addEventListener("pointerdown", function (e) {
+    if (eraserLayer) {
+      if (!eraserLayer.eraseCanvas) return;
+      eraseState = { layer: eraserLayer, id: e.pointerId, prevX: null, prevY: null };
+      canvas.setPointerCapture(e.pointerId);
+      eraseStrokeTo(pointerCanvasPos(e));
+      e.preventDefault();
+      return;
+    }
+
     var layer = getDragTarget();
     if (!layer) return;
     dragState = {
@@ -2012,6 +2070,13 @@
   });
 
   canvas.addEventListener("pointermove", function (e) {
+    if (eraserLayer) {
+      lastEraseClient = { clientX: e.clientX, clientY: e.clientY };
+      updateEraserCursor(lastEraseClient);
+      if (eraseState) eraseStrokeTo(pointerCanvasPos(e));
+      return;
+    }
+
     if (!dragState) return;
 
     var s = canvasScale();
@@ -2037,6 +2102,17 @@
   });
 
   function endDrag(e) {
+    if (eraseState) {
+      var erased = eraseState.layer;
+      eraseState = null;
+      erased._outline = null;
+      if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
+        canvas.releasePointerCapture(e.pointerId);
+      }
+      render();
+      return;
+    }
+
     if (!dragState) return;
     dragState = null;
     canvas.classList.remove("dragging");
@@ -2047,6 +2123,129 @@
 
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
+  canvas.addEventListener("pointerleave", function () {
+    if (eraserLayer && !eraseState) hideEraserCursor();
+  });
+
+  /* ---------------- Eraser ---------------- */
+
+  var eraserLayer = null;
+  var eraseState = null;
+  var lastEraseClient = null;
+
+  function ensureEraseCanvas(layer) {
+    if (layer.eraseCanvas && layer._eraseSource === layer.image) return layer.eraseCanvas;
+
+    var iw = imgW(layer.image);
+    var ih = imgH(layer.image);
+    var editable = document.createElement("canvas");
+    editable.width = iw;
+    editable.height = ih;
+    editable.getContext("2d").drawImage(layer.image, 0, 0, iw, ih);
+
+    layer.eraseCanvas = editable;
+    layer._eraseSource = editable;
+    layer.image = editable;
+    layer.src = null;
+    layer._outline = null;
+    return editable;
+  }
+
+  function pointerCanvasPos(e) {
+    var rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (rect.width ? W / rect.width : 1),
+      y: (e.clientY - rect.top) * (rect.height ? H / rect.height : 1)
+    };
+  }
+
+  function eraseStrokeTo(pos) {
+    var layer = eraseState.layer;
+    var editable = layer.eraseCanvas;
+    if (!editable) return;
+
+    var s = Number(layer.scale) || 1;
+    var dw = imgW(layer.image) * s;
+    var dh = imgH(layer.image) * s;
+    var dx = (W - dw) / 2 + Number(layer.x || 0);
+    var dy = (H - dh) / 2 + Number(layer.y || 0);
+
+    var nx = (pos.x - dx) / s;
+    var ny = (pos.y - dy) / s;
+    var radius = Math.max(0.5, (Number(layer.eraseRadius) || 20) / s);
+
+    var ectx = editable.getContext("2d");
+    ectx.save();
+    ectx.globalCompositeOperation = "destination-out";
+    ectx.fillStyle = "#000000";
+    ectx.strokeStyle = "#000000";
+    ectx.lineWidth = radius * 2;
+    ectx.lineCap = "round";
+    ectx.lineJoin = "round";
+
+    if (eraseState.prevX === null) {
+      ectx.beginPath();
+      ectx.arc(nx, ny, radius, 0, Math.PI * 2);
+      ectx.fill();
+    } else {
+      ectx.beginPath();
+      ectx.moveTo(eraseState.prevX, eraseState.prevY);
+      ectx.lineTo(nx, ny);
+      ectx.stroke();
+    }
+    ectx.restore();
+
+    eraseState.prevX = nx;
+    eraseState.prevY = ny;
+    render();
+  }
+
+  function updateEraserCursor(e) {
+    if (!eraserLayer) return;
+    var rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
+    var displayRadius = Math.max(1, Number(eraserLayer.eraseRadius) || 20) * (rect.width / W);
+    var x = e.clientX - rect.left;
+    var y = e.clientY - rect.top;
+    eraserCursor.style.width = displayRadius * 2 + "px";
+    eraserCursor.style.height = displayRadius * 2 + "px";
+    eraserCursor.style.left = x - displayRadius + "px";
+    eraserCursor.style.top = y - displayRadius + "px";
+    eraserCursor.style.display = "block";
+  }
+
+  function hideEraserCursor() {
+    eraserCursor.style.display = "none";
+  }
+
+  function updateEraserUI() {
+    var active = !!eraserLayer;
+    eraserDoneBtn.style.display = active ? "" : "none";
+    eraserHint.style.display = active ? "" : "none";
+    eraserToggleBtn.classList.toggle("active", active);
+    canvas.classList.toggle("eraser-mode", active);
+    if (!active) hideEraserCursor();
+  }
+
+  function enterEraser(layer) {
+    if (!layer || layer.type !== "image" || !layer.image || layer.locked) return;
+    ensureEraseCanvas(layer);
+    eraserLayer = layer;
+    eraseState = null;
+    updateEraserUI();
+    updateCanvasCursor();
+  }
+
+  function exitEraser() {
+    if (!eraserLayer) return;
+    eraserLayer._outline = null;
+    eraserLayer = null;
+    eraseState = null;
+    lastEraseClient = null;
+    updateEraserUI();
+    updateCanvasCursor();
+    render();
+  }
 
   /* ---------------- Control wiring ---------------- */
 
@@ -2163,6 +2362,11 @@
   bindImageSlider(imgShadowXEl, "shadowX", imgShadowXVal);
   bindImageSlider(imgShadowYEl, "shadowY", imgShadowYVal);
   bindImageSlider(imgShadowBlurEl, "shadowBlur", imgShadowBlurVal);
+  bindImageSlider(imgEraseRadiusEl, "eraseRadius", imgEraseRadiusVal);
+
+  imgEraseRadiusEl.addEventListener("input", function () {
+    if (eraserLayer && lastEraseClient) updateEraserCursor(lastEraseClient);
+  });
 
   imgStrokeColorEl.addEventListener("input", function () {
     if (selectedLayer && selectedLayer.type === "image") selectedLayer.strokeColor = imgStrokeColorEl.value;
@@ -2177,6 +2381,16 @@
   removeBgBtn.addEventListener("click", function () {
     if (selectedLayer && selectedLayer.type === "image") removeBackgroundFromLayer(selectedLayer);
   });
+
+  eraserToggleBtn.addEventListener("click", function () {
+    if (eraserLayer) {
+      exitEraser();
+      return;
+    }
+    if (selectedLayer && selectedLayer.type === "image") enterEraser(selectedLayer);
+  });
+
+  eraserDoneBtn.addEventListener("click", exitEraser);
 
   addImageLayerBtn.addEventListener("click", function () {
     layerImageInput.click();
@@ -2196,6 +2410,7 @@
   buildPresets();
   reset();
   loadSavedSettings();
+  updateEraserUI();
 
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () { render(); });
