@@ -4,5 +4,6 @@
 - Prefers self-contained single-file deliverables for small web tools — one `index.html` with embedded CSS and JS rather than split files or a build step. Confidence: 0.65
 - Prefers dark UI styling for the apps/tools they request. Confidence: 0.6
 - Wants git work scoped to a local `git init` + commit by default; publishing (creating a public repo, enabling Pages, pushing) should only happen when explicitly asked. Confidence: 0.55
-- Expects feature additions to be additive and non-breaking — repeatedly asks that new controls work with the existing ones and that all existing functionality keep working, so extend with targeted edits rather than rewriting the file. Confidence: 0.6
+- Expects feature additions to be additive and non-breaking — repeatedly asks that new controls work with the existing ones and that all existing functionality keep working, so extend with targeted edits rather than rewriting the file. Confidence: 0.65
+- Wants controls/options to be consistent across object types in the same tool — when image layers need styling, expects them to expose the same control set as text layers (stroke width/color, shadow X/Y/blur/color) rather than a bespoke subset. Confidence: 0.5
 - Prefers web fonts loaded from the Google Fonts CDN (with preconnect links) and pinned via a single font-family constant, rather than bundling font files or relying on system fonts. Confidence: 0.5

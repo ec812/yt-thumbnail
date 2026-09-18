@@ -368,11 +368,130 @@
   }
 
   button.ghost:hover { color: var(--text); border-color: #3d4757; }
+  button.ghost:disabled { opacity: 0.5; cursor: default; }
 
   .divider {
     height: 1px;
     background: var(--border);
   }
+
+  /* ---- Layers panel ---- */
+  .block-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .panel-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  .layer-add { display: flex; gap: 6px; }
+
+  button.mini {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 7px;
+    padding: 5px 9px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+
+  button.mini:hover { border-color: #3d4757; }
+
+  .layer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .layer-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .layer-row:hover { border-color: #3d4757; }
+
+  .layer-row.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  .layer-row.is-hidden .layer-name { opacity: 0.4; }
+  .layer-row.dragging { opacity: 0.45; }
+  .layer-row.drop-target { border-color: var(--accent-2); box-shadow: 0 0 0 1px var(--accent-2); }
+
+  .layer-grip {
+    display: flex;
+    align-items: center;
+    color: var(--muted);
+    cursor: grab;
+    flex: 0 0 auto;
+  }
+
+  .icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 2px;
+    color: var(--muted);
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+
+  .icon-btn:hover { color: var(--text); }
+
+  .layer-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .layer-badge {
+    flex: 0 0 auto;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 6px;
+  }
+
+  .spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex: 0 0 auto;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   @media (max-width: 1080px) {
     .app {
@@ -400,22 +519,50 @@
     <div class="canvas-wrap">
       <canvas id="canvas" width="1280" height="720"></canvas>
     </div>
-    <p class="hint">Upload a background, then <strong>drag the canvas to reposition</strong> it. Set your text, tweak the sliders. Export gives you an exact 1280&times;720 PNG.</p>
+    <p class="hint">Pick a layer in the <strong>Layers</strong> panel to edit it. An image or background layer can be <strong>dragged on the canvas</strong>. Export gives you an exact 1280&times;720 PNG of every visible layer.</p>
   </main>
 
   <aside class="panel">
-    <fieldset>
+    <div>
+      <div class="block-head">
+        <span class="panel-title">Layers</span>
+        <div class="layer-add">
+          <button class="mini" type="button" id="addImageLayer">+ Image</button>
+          <button class="mini" type="button" id="addTextLayer">+ Text</button>
+        </div>
+      </div>
+      <div class="layer-list" id="layerList"></div>
+      <input type="file" id="layerImageInput" accept="image/*" style="display:none" />
+    </div>
+
+    <div class="divider"></div>
+
+    <fieldset data-for="background">
       <legend>Background</legend>
       <div class="field">
         <input type="file" id="bgInput" accept="image/*" />
         <div class="meta" id="bgName">No image — solid black</div>
       </div>
       <button class="ghost" type="button" id="clearBg">Clear background</button>
+      <div class="field">
+        <div class="label-row">
+          <label for="overlay">Overlay darkness</label>
+          <span class="value" id="overlayVal">70%</span>
+        </div>
+        <input type="range" id="overlay" min="0" max="100" step="1" value="70" />
+      </div>
+      <div class="field">
+        <div class="label-row">
+          <label for="overlayStart">Overlay start</label>
+          <span class="value" id="overlayStartVal">65%</span>
+        </div>
+        <input type="range" id="overlayStart" min="0" max="100" step="1" value="65" />
+      </div>
     </fieldset>
 
-    <div class="divider"></div>
+    <div class="divider" data-for="background"></div>
 
-    <fieldset>
+    <fieldset data-for="text">
       <legend>Text</legend>
       <label class="check">
         <input type="checkbox" id="presetCjk" />
@@ -444,9 +591,9 @@
       </div>
     </fieldset>
 
-    <div class="divider"></div>
+    <div class="divider" data-for="text"></div>
 
-    <fieldset>
+    <fieldset data-for="text">
       <legend>Text gradient</legend>
       <div class="presets" id="presets"></div>
       <div class="row">
@@ -468,9 +615,9 @@
       </div>
     </fieldset>
 
-    <div class="divider"></div>
+    <div class="divider" data-for="text"></div>
 
-    <fieldset>
+    <fieldset data-for="text">
       <legend>Stroke</legend>
       <div class="field">
         <div class="label-row">
@@ -485,9 +632,9 @@
       </div>
     </fieldset>
 
-    <div class="divider"></div>
+    <div class="divider" data-for="text"></div>
 
-    <fieldset>
+    <fieldset data-for="text">
       <legend>Shadow</legend>
       <div class="row">
         <div class="field">
@@ -518,9 +665,9 @@
       </div>
     </fieldset>
 
-    <div class="divider"></div>
+    <div class="divider" data-for="text"></div>
 
-    <fieldset>
+    <fieldset data-for="text">
       <legend>Adjust</legend>
       <div class="field">
         <div class="label-row">
@@ -543,23 +690,79 @@
         </div>
         <input type="range" id="textY" min="0" max="100" step="1" value="93" />
       </div>
-      <div class="field">
-        <div class="label-row">
-          <label for="overlay">Overlay darkness</label>
-          <span class="value" id="overlayVal">70%</span>
-        </div>
-        <input type="range" id="overlay" min="0" max="100" step="1" value="70" />
-      </div>
-      <div class="field">
-        <div class="label-row">
-          <label for="overlayStart">Overlay start</label>
-          <span class="value" id="overlayStartVal">65%</span>
-        </div>
-        <input type="range" id="overlayStart" min="0" max="100" step="1" value="65" />
-      </div>
     </fieldset>
 
-    <div class="divider"></div>
+    <div class="divider" data-for="text"></div>
+
+    <fieldset data-for="image">
+      <legend>Image layer</legend>
+      <div class="meta" id="imageMeta">No image</div>
+      <div class="field">
+        <div class="label-row">
+          <label for="imgX">Position X</label>
+          <span class="value" id="imgXVal">0px</span>
+        </div>
+        <input type="range" id="imgX" min="-1280" max="1280" step="1" value="0" />
+      </div>
+      <div class="field">
+        <div class="label-row">
+          <label for="imgY">Position Y</label>
+          <span class="value" id="imgYVal">0px</span>
+        </div>
+        <input type="range" id="imgY" min="-720" max="720" step="1" value="0" />
+      </div>
+      <div class="field">
+        <div class="label-row">
+          <label for="imgScale">Scale</label>
+          <span class="value" id="imgScaleVal">1.00&times;</span>
+        </div>
+        <input type="range" id="imgScale" min="0.1" max="3" step="0.01" value="1" />
+      </div>
+      <div class="divider"></div>
+      <div class="field">
+        <div class="label-row">
+          <label for="imgStrokeWidth">Stroke width</label>
+          <span class="value" id="imgStrokeWidthVal">0px</span>
+        </div>
+        <input type="range" id="imgStrokeWidth" min="0" max="24" step="1" value="0" />
+      </div>
+      <div class="field">
+        <label for="imgStrokeColor">Stroke color</label>
+        <input type="color" id="imgStrokeColor" value="#000000" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <div class="label-row">
+            <label for="imgShadowX">Shadow X</label>
+            <span class="value" id="imgShadowXVal">0px</span>
+          </div>
+          <input type="range" id="imgShadowX" min="-40" max="40" step="1" value="0" />
+        </div>
+        <div class="field">
+          <div class="label-row">
+            <label for="imgShadowY">Shadow Y</label>
+            <span class="value" id="imgShadowYVal">0px</span>
+          </div>
+          <input type="range" id="imgShadowY" min="-40" max="40" step="1" value="0" />
+        </div>
+      </div>
+      <div class="field">
+        <div class="label-row">
+          <label for="imgShadowBlur">Shadow blur</label>
+          <span class="value" id="imgShadowBlurVal">0px</span>
+        </div>
+        <input type="range" id="imgShadowBlur" min="0" max="60" step="1" value="0" />
+      </div>
+      <div class="field">
+        <label for="imgShadowColor">Shadow color</label>
+        <input type="color" id="imgShadowColor" value="#000000" />
+      </div>
+      <div class="divider"></div>
+      <button class="ghost" type="button" id="removeBg">Remove background</button>
+      <div class="meta" id="aiStatus"></div>
+    </fieldset>
+
+    <div class="divider" data-for="image"></div>
 
     <fieldset>
       <legend>Export</legend>
@@ -627,6 +830,31 @@
   var shadowBlurVal = document.getElementById("shadowBlurVal");
   var shadowColorEl = document.getElementById("shadowColor");
 
+  var imgXEl = document.getElementById("imgX");
+  var imgXVal = document.getElementById("imgXVal");
+  var imgYEl = document.getElementById("imgY");
+  var imgYVal = document.getElementById("imgYVal");
+  var imgScaleEl = document.getElementById("imgScale");
+  var imgScaleVal = document.getElementById("imgScaleVal");
+  var imgStrokeWidthEl = document.getElementById("imgStrokeWidth");
+  var imgStrokeWidthVal = document.getElementById("imgStrokeWidthVal");
+  var imgStrokeColorEl = document.getElementById("imgStrokeColor");
+  var imgShadowXEl = document.getElementById("imgShadowX");
+  var imgShadowXVal = document.getElementById("imgShadowXVal");
+  var imgShadowYEl = document.getElementById("imgShadowY");
+  var imgShadowYVal = document.getElementById("imgShadowYVal");
+  var imgShadowBlurEl = document.getElementById("imgShadowBlur");
+  var imgShadowBlurVal = document.getElementById("imgShadowBlurVal");
+  var imgShadowColorEl = document.getElementById("imgShadowColor");
+  var imageMeta = document.getElementById("imageMeta");
+  var removeBgBtn = document.getElementById("removeBg");
+  var aiStatus = document.getElementById("aiStatus");
+
+  var layerList = document.getElementById("layerList");
+  var addImageLayerBtn = document.getElementById("addImageLayer");
+  var addTextLayerBtn = document.getElementById("addTextLayer");
+  var layerImageInput = document.getElementById("layerImageInput");
+
   var downloadBtn = document.getElementById("download");
   var resetBtn = document.getElementById("reset");
   var saveSettingsBtn = document.getElementById("saveSettings");
@@ -669,16 +897,34 @@
     { name: "Bubblegum", from: "#ff8ad8", to: "#8e24aa" }
   ];
 
-  var bgImage = null;
-  var bgOffsetX = 0;
-  var bgOffsetY = 0;
+  var ICONS = {
+    eye: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>',
+    eyeOff: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+    unlock: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',
+    grip: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>'
+  };
+
   var offscreen = document.createElement("canvas");
   var offCtx = offscreen.getContext("2d");
 
-  function getLines() {
-    return lines
-      .map(function (input) { return input.value.trim(); })
-      .filter(function (v) { return v.length > 0; });
+  var layers = [];
+  var selectedLayer = null;
+  var dragLayerId = null;
+  var idCounter = 0;
+
+  function nextId() {
+    idCounter++;
+    return "layer_" + Date.now().toString(36) + "_" + idCounter;
+  }
+
+  function imgW(img) {
+    return img.naturalWidth || img.width || 0;
+  }
+
+  function imgH(img) {
+    return img.naturalHeight || img.height || 0;
   }
 
   function coverRect(iw, ih, cw, ch) {
@@ -693,30 +939,100 @@
     };
   }
 
-  function drawBackground() {
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, W, H);
-
-    if (!bgImage) return;
-
-    var r = coverRect(bgImage.naturalWidth, bgImage.naturalHeight, W, H);
-
-    var dx = Math.min(0, Math.max(W - r.dw, r.dx + bgOffsetX));
-    var dy = Math.min(0, Math.max(H - r.dh, r.dy + bgOffsetY));
-    bgOffsetX = dx - r.dx;
-    bgOffsetY = dy - r.dy;
-
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(bgImage, dx, dy, r.dw, r.dh);
+  function getLayerLines(layer) {
+    return layer.text
+      .map(function (v) { return String(v == null ? "" : v).trim(); })
+      .filter(function (v) { return v.length > 0; });
   }
 
-  function drawOverlay() {
-    var strength = Number(overlayEl.value) / 100;
-    if (strength <= 0) return;
+  function createBackgroundLayer() {
+    return {
+      id: nextId(),
+      type: "background",
+      visible: true,
+      locked: false,
+      name: "Background",
+      image: null,
+      src: null,
+      x: 0,
+      y: 0,
+      scale: 1,
+      overlay: DEFAULTS.overlay,
+      overlayStart: DEFAULTS.overlayStart
+    };
+  }
 
-    var start = Number(overlayStartEl.value) / 100;
+  function createTextLayer() {
+    return {
+      id: nextId(),
+      type: "text",
+      visible: true,
+      locked: false,
+      name: "Text",
+      text: ["", "", ""],
+      presetCjk: false,
+      color1: DEFAULTS.color1,
+      color2: DEFAULTS.color2,
+      gradientAngle: DEFAULTS.gradientAngle,
+      fontSize: DEFAULTS.fontSize,
+      lineHeight: DEFAULTS.lineHeight,
+      textY: DEFAULTS.textY,
+      strokeWidth: DEFAULTS.strokeWidth,
+      strokeColor: DEFAULTS.strokeColor,
+      shadowX: DEFAULTS.shadowX,
+      shadowY: DEFAULTS.shadowY,
+      shadowBlur: DEFAULTS.shadowBlur,
+      shadowColor: DEFAULTS.shadowColor
+    };
+  }
+
+  function createImageLayer() {
+    return {
+      id: nextId(),
+      type: "image",
+      visible: true,
+      locked: false,
+      name: "Image",
+      image: null,
+      src: null,
+      x: 0,
+      y: 0,
+      scale: 1,
+      strokeWidth: 0,
+      strokeColor: "#000000",
+      shadowX: 0,
+      shadowY: 0,
+      shadowBlur: 0,
+      shadowColor: "#000000",
+      busy: false
+    };
+  }
+
+  function defaultTextLayer() {
+    var layer = createTextLayer();
+    layer.text = [DEFAULTS.line1, DEFAULTS.line2, DEFAULTS.line3];
+    return layer;
+  }
+
+  function firstTextLayer() {
+    for (var i = 0; i < layers.length; i++) {
+      if (layers[i].type === "text") return layers[i];
+    }
+    return null;
+  }
+
+  function backgroundLayer() {
+    for (var i = 0; i < layers.length; i++) {
+      if (layers[i].type === "background") return layers[i];
+    }
+    return null;
+  }
+
+  function drawOverlay(layer) {
+    var strength = Number(layer.overlay) / 100;
+    if (!(strength > 0)) return;
+
+    var start = Number(layer.overlayStart) / 100;
     var grad = ctx.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, "rgba(0,0,0,0)");
     grad.addColorStop(Math.min(start, 0.98), "rgba(0,0,0,0)");
@@ -724,6 +1040,120 @@
 
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
+  }
+
+  function drawBackgroundLayer(layer) {
+    if (layer.image) {
+      var r = coverRect(imgW(layer.image), imgH(layer.image), W, H);
+
+      var dx = Math.min(0, Math.max(W - r.dw, r.dx + Number(layer.x || 0)));
+      var dy = Math.min(0, Math.max(H - r.dh, r.dy + Number(layer.y || 0)));
+      layer.x = dx - r.dx;
+      layer.y = dy - r.dy;
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(layer.image, dx, dy, r.dw, r.dh);
+    }
+  }
+
+  function makeImageOutline(img, w, h, color, strokeWidth) {
+    var pad = Math.ceil(strokeWidth);
+
+    var silhouette = document.createElement("canvas");
+    silhouette.width = w;
+    silhouette.height = h;
+    var sx = silhouette.getContext("2d");
+    sx.drawImage(img, 0, 0, w, h);
+    sx.globalCompositeOperation = "source-in";
+    sx.fillStyle = color;
+    sx.fillRect(0, 0, w, h);
+
+    var outline = document.createElement("canvas");
+    outline.width = w + pad * 2;
+    outline.height = h + pad * 2;
+    var ox = outline.getContext("2d");
+
+    // dilate the silhouette by strokeWidth, then subtract the original so
+    // only the outer ring is painted (the image interior stays untouched)
+    var steps = Math.max(16, Math.min(64, Math.ceil(strokeWidth * 4)));
+    for (var i = 0; i < steps; i++) {
+      var angle = (i / steps) * Math.PI * 2;
+      ox.drawImage(silhouette, pad + Math.cos(angle) * strokeWidth, pad + Math.sin(angle) * strokeWidth);
+    }
+    ox.globalCompositeOperation = "destination-out";
+    ox.drawImage(silhouette, pad, pad);
+    ox.globalCompositeOperation = "source-over";
+
+    return outline;
+  }
+
+  function imageOutline(layer, w, h, color, strokeWidth) {
+    var cache = layer._outline;
+    if (!cache || cache.img !== layer.image || cache.w !== w || cache.h !== h ||
+        cache.color !== color || cache.strokeWidth !== strokeWidth) {
+      cache = layer._outline = {
+        img: layer.image,
+        w: w,
+        h: h,
+        color: color,
+        strokeWidth: strokeWidth,
+        canvas: makeImageOutline(layer.image, w, h, color, strokeWidth)
+      };
+    }
+    return cache.canvas;
+  }
+
+  function drawImageLayer(layer) {
+    if (!layer.image) return;
+
+    var iw = imgW(layer.image);
+    var ih = imgH(layer.image);
+    var s = Number(layer.scale) || 1;
+    var dw = iw * s;
+    var dh = ih * s;
+    var dx = (W - dw) / 2 + Number(layer.x || 0);
+    var dy = (H - dh) / 2 + Number(layer.y || 0);
+
+    var strokeWidth = Math.max(0, Number(layer.strokeWidth) || 0);
+    var shadowX = Number(layer.shadowX) || 0;
+    var shadowY = Number(layer.shadowY) || 0;
+    var shadowBlur = Number(layer.shadowBlur) || 0;
+    var hasShadow = shadowBlur > 0 || shadowX !== 0 || shadowY !== 0;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
+    if (strokeWidth <= 0 && !hasShadow) {
+      ctx.drawImage(layer.image, dx, dy, dw, dh);
+      return;
+    }
+
+    if (hasShadow) {
+      ctx.save();
+      applyShadow(shadowX, shadowY, shadowBlur, layer.shadowColor);
+      ctx.drawImage(layer.image, dx, dy, dw, dh);
+      ctx.restore();
+    }
+
+    if (strokeWidth > 0) {
+      var pad = Math.ceil(strokeWidth);
+      var outline = imageOutline(
+        layer,
+        Math.max(1, Math.round(dw)),
+        Math.max(1, Math.round(dh)),
+        layer.strokeColor,
+        strokeWidth
+      );
+      ctx.drawImage(outline, dx - pad, dy - pad, dw + pad * 2, dh + pad * 2);
+      ctx.drawImage(layer.image, dx, dy, dw, dh);
+    }
+  }
+
+  function drawOverlayPass() {
+    var layer = backgroundLayer();
+    if (!layer || !layer.visible) return;
+    drawOverlay(layer);
   }
 
   function gradientClippedLine(text, fontSize, colorA, colorB, lineHeight, angleDeg, solid) {
@@ -783,32 +1213,32 @@
     return { canvas: offscreen, width: width, lineHeight: lineHeight };
   }
 
-  function applyShadow(ox, oy, blur) {
-    ctx.shadowColor = shadowColorEl.value;
+  function applyShadow(ox, oy, blur, color) {
+    ctx.shadowColor = color;
     ctx.shadowOffsetX = ox;
     ctx.shadowOffsetY = oy;
     ctx.shadowBlur = blur;
   }
 
-  function drawText() {
-    var textLines = getLines();
+  function drawTextLayer(layer) {
+    var textLines = getLayerLines(layer);
     if (textLines.length === 0) return;
 
-    var fontSize = Number(fontSizeEl.value);
-    var lineHeight = Math.max(1, Math.round(fontSize * Number(lineHeightEl.value)));
+    var fontSize = Number(layer.fontSize);
+    var lineHeight = Math.max(1, Math.round(fontSize * Number(layer.lineHeight)));
     var blockHeight = lineHeight * textLines.length;
-    var pos = Number(textYEl.value) / 100;
+    var pos = Number(layer.textY) / 100;
 
     var maxTop = Math.max(0, H - blockHeight);
     var blockTop = Math.round(maxTop * pos);
 
-    var strokeWidth = Number(strokeWidthEl.value);
-    var shadowX = Number(shadowXEl.value);
-    var shadowY = Number(shadowYEl.value);
-    var shadowBlur = Number(shadowBlurEl.value);
+    var strokeWidth = Number(layer.strokeWidth);
+    var shadowX = Number(layer.shadowX);
+    var shadowY = Number(layer.shadowY);
+    var shadowBlur = Number(layer.shadowBlur);
     var hasShadow = shadowBlur > 0 || shadowX !== 0 || shadowY !== 0;
-    var angle = Number(gradientAngleEl.value);
-    var whiteFirstLine = presetCjk.checked && line1.value.trim().length > 0;
+    var angle = Number(layer.gradientAngle);
+    var whiteFirstLine = layer.presetCjk && String(layer.text[0] || "").trim().length > 0;
 
     for (var i = 0; i < textLines.length; i++) {
       var line = textLines[i];
@@ -816,24 +1246,24 @@
       var centerX = W / 2;
       var centerY = y + lineHeight / 2;
 
-      var result = gradientClippedLine(line, fontSize, c1.value, c2.value, lineHeight, angle, whiteFirstLine && i === 0);
+      var result = gradientClippedLine(line, fontSize, layer.color1, layer.color2, lineHeight, angle, whiteFirstLine && i === 0);
       var x = Math.round((W - result.width) / 2);
 
       if (strokeWidth > 0) {
         ctx.save();
-        if (hasShadow) applyShadow(shadowX, shadowY, shadowBlur);
+        if (hasShadow) applyShadow(shadowX, shadowY, shadowBlur, layer.shadowColor);
         ctx.font = fontString(fontSize);
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.lineJoin = "round";
         ctx.lineCap = "round";
         ctx.lineWidth = strokeWidth * 2;
-        ctx.strokeStyle = strokeColorEl.value;
+        ctx.strokeStyle = layer.strokeColor;
         ctx.strokeText(line, centerX, centerY);
         ctx.restore();
       } else if (hasShadow) {
         ctx.save();
-        applyShadow(shadowX, shadowY, shadowBlur);
+        applyShadow(shadowX, shadowY, shadowBlur, layer.shadowColor);
         ctx.drawImage(result.canvas, x, y);
         ctx.restore();
       }
@@ -843,9 +1273,38 @@
   }
 
   function render() {
-    drawBackground();
-    drawOverlay();
-    drawText();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    ctx.shadowColor = "rgba(0,0,0,0)";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, W, H);
+
+    var i;
+    var layer;
+
+    // image layers (background + image), bottom to top
+    for (i = 0; i < layers.length; i++) {
+      layer = layers[i];
+      if (!layer.visible || layer.type === "text") continue;
+      if (layer.type === "background") drawBackgroundLayer(layer);
+      else drawImageLayer(layer);
+    }
+
+    // the overlay always sits above every image layer and below every text layer
+    drawOverlayPass();
+
+    // text layers, bottom to top
+    for (i = 0; i < layers.length; i++) {
+      layer = layers[i];
+      if (!layer.visible || layer.type !== "text") continue;
+      drawTextLayer(layer);
+    }
   }
 
   function scheduleRender() {
@@ -881,6 +1340,292 @@
     shadowBlurVal.textContent = shadowBlurEl.value + "px";
   }
 
+  function syncImageControls(layer) {
+    imgXEl.value = Math.round(Number(layer.x) || 0);
+    imgYEl.value = Math.round(Number(layer.y) || 0);
+    imgScaleEl.value = Number(layer.scale) || 1;
+    imgStrokeWidthEl.value = Number(layer.strokeWidth) || 0;
+    imgStrokeColorEl.value = layer.strokeColor || "#000000";
+    imgShadowXEl.value = Number(layer.shadowX) || 0;
+    imgShadowYEl.value = Number(layer.shadowY) || 0;
+    imgShadowBlurEl.value = Number(layer.shadowBlur) || 0;
+    imgShadowColorEl.value = layer.shadowColor || "#000000";
+    syncImageLabels();
+  }
+
+  function syncImageLabels() {
+    imgXVal.textContent = imgXEl.value + "px";
+    imgYVal.textContent = imgYEl.value + "px";
+    imgScaleVal.textContent = Number(imgScaleEl.value).toFixed(2) + "\u00d7";
+    imgStrokeWidthVal.textContent = imgStrokeWidthEl.value + "px";
+    imgShadowXVal.textContent = imgShadowXEl.value + "px";
+    imgShadowYVal.textContent = imgShadowYEl.value + "px";
+    imgShadowBlurVal.textContent = imgShadowBlurEl.value + "px";
+  }
+
+  function syncControlsFromLayer(layer) {
+    if (!layer) return;
+
+    if (layer.type === "text") {
+      line1.value = layer.text[0] || "";
+      line2.value = layer.text[1] || "";
+      line3.value = layer.text[2] || "";
+      presetCjk.checked = !!layer.presetCjk;
+      c1.value = layer.color1;
+      c2.value = layer.color2;
+      gradientAngleEl.value = layer.gradientAngle;
+      fontSizeEl.value = layer.fontSize;
+      lineHeightEl.value = layer.lineHeight;
+      textYEl.value = layer.textY;
+      strokeWidthEl.value = layer.strokeWidth;
+      strokeColorEl.value = layer.strokeColor;
+      shadowXEl.value = layer.shadowX;
+      shadowYEl.value = layer.shadowY;
+      shadowBlurEl.value = layer.shadowBlur;
+      shadowColorEl.value = layer.shadowColor;
+    } else if (layer.type === "background") {
+      overlayEl.value = layer.overlay;
+      overlayStartEl.value = layer.overlayStart;
+      bgInput.value = "";
+      bgName.textContent = layer.image
+        ? (layer.name + " \u2014 " + imgW(layer.image) + "\u00d7" + imgH(layer.image))
+        : "No image \u2014 solid black";
+    } else if (layer.type === "image") {
+      syncImageControls(layer);
+      imageMeta.textContent = layer.image
+        ? (layer.name + " \u2014 " + imgW(layer.image) + "\u00d7" + imgH(layer.image))
+        : "No image";
+    }
+
+    syncSliderLabels();
+    updateCharCounts();
+    markActivePreset();
+  }
+
+  function syncLayerFromControls(layer) {
+    if (!layer) return;
+
+    if (layer.type === "text") {
+      layer.text = [line1.value, line2.value, line3.value];
+      layer.presetCjk = presetCjk.checked;
+      layer.color1 = c1.value;
+      layer.color2 = c2.value;
+      layer.gradientAngle = Number(gradientAngleEl.value);
+      layer.fontSize = Number(fontSizeEl.value);
+      layer.lineHeight = Number(lineHeightEl.value);
+      layer.textY = Number(textYEl.value);
+      layer.strokeWidth = Number(strokeWidthEl.value);
+      layer.strokeColor = strokeColorEl.value;
+      layer.shadowX = Number(shadowXEl.value);
+      layer.shadowY = Number(shadowYEl.value);
+      layer.shadowBlur = Number(shadowBlurEl.value);
+      layer.shadowColor = shadowColorEl.value;
+    } else if (layer.type === "background") {
+      layer.overlay = Number(overlayEl.value);
+      layer.overlayStart = Number(overlayStartEl.value);
+    } else if (layer.type === "image") {
+      layer.x = Number(imgXEl.value);
+      layer.y = Number(imgYEl.value);
+      layer.scale = Number(imgScaleEl.value);
+      layer.strokeWidth = Number(imgStrokeWidthEl.value);
+      layer.strokeColor = imgStrokeColorEl.value;
+      layer.shadowX = Number(imgShadowXEl.value);
+      layer.shadowY = Number(imgShadowYEl.value);
+      layer.shadowBlur = Number(imgShadowBlurEl.value);
+      layer.shadowColor = imgShadowColorEl.value;
+    }
+  }
+
+  function updatePanelVisibility() {
+    var type = selectedLayer ? selectedLayer.type : "";
+    var nodes = document.querySelectorAll("[data-for]");
+    for (var i = 0; i < nodes.length; i++) {
+      nodes[i].style.display = nodes[i].getAttribute("data-for") === type ? "" : "none";
+    }
+  }
+
+  function clearDropTargets() {
+    var rows = layerList.querySelectorAll(".layer-row");
+    for (var i = 0; i < rows.length; i++) rows[i].classList.remove("drop-target");
+  }
+
+  function buildLayerRow(layer) {
+    var row = document.createElement("div");
+    row.className = "layer-row";
+    if (layer === selectedLayer) row.classList.add("active");
+    if (!layer.visible) row.classList.add("is-hidden");
+    row.draggable = true;
+    row.dataset.id = layer.id;
+
+    var grip = document.createElement("span");
+    grip.className = "layer-grip";
+    grip.title = "Drag to reorder";
+    grip.innerHTML = ICONS.grip;
+
+    var eye = document.createElement("button");
+    eye.type = "button";
+    eye.className = "icon-btn layer-eye";
+    eye.title = layer.visible ? "Hide layer" : "Show layer";
+    eye.innerHTML = layer.visible ? ICONS.eye : ICONS.eyeOff;
+    eye.addEventListener("click", function (e) {
+      e.stopPropagation();
+      layer.visible = !layer.visible;
+      refreshLayerPanel();
+      render();
+    });
+
+    var lock = document.createElement("button");
+    lock.type = "button";
+    lock.className = "icon-btn layer-lock";
+    lock.title = layer.locked ? "Unlock layer" : "Lock layer";
+    lock.innerHTML = layer.locked ? ICONS.lock : ICONS.unlock;
+    lock.addEventListener("click", function (e) {
+      e.stopPropagation();
+      layer.locked = !layer.locked;
+      refreshLayerPanel();
+      updateCanvasCursor();
+    });
+
+    var name = document.createElement("span");
+    name.className = "layer-name";
+    name.textContent = layer.name || layer.type;
+
+    var badge = document.createElement("span");
+    badge.className = "layer-badge";
+    badge.textContent = layer.type === "background" ? "bg" : layer.type;
+
+    var del = document.createElement("button");
+    del.type = "button";
+    del.className = "icon-btn layer-del";
+    del.title = "Delete layer";
+    del.innerHTML = ICONS.trash;
+    del.addEventListener("click", function (e) {
+      e.stopPropagation();
+      deleteLayer(layer);
+    });
+
+    row.appendChild(grip);
+    row.appendChild(eye);
+    row.appendChild(lock);
+    row.appendChild(name);
+    if (layer.busy) {
+      var spinner = document.createElement("span");
+      spinner.className = "spinner";
+      row.appendChild(spinner);
+    }
+    row.appendChild(badge);
+    row.appendChild(del);
+
+    row.addEventListener("click", function () { selectLayer(layer); });
+
+    row.addEventListener("dragstart", function (e) {
+      dragLayerId = layer.id;
+      row.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", layer.id); } catch (err) {}
+    });
+    row.addEventListener("dragend", function () {
+      dragLayerId = null;
+      row.classList.remove("dragging");
+      clearDropTargets();
+    });
+    row.addEventListener("dragover", function (e) {
+      if (!dragLayerId || dragLayerId === layer.id) return;
+      e.preventDefault();
+      row.classList.add("drop-target");
+    });
+    row.addEventListener("dragleave", function () {
+      row.classList.remove("drop-target");
+    });
+    row.addEventListener("drop", function (e) {
+      e.preventDefault();
+      row.classList.remove("drop-target");
+      if (dragLayerId) reorderLayer(dragLayerId, layer.id);
+    });
+
+    return row;
+  }
+
+  function refreshLayerPanel() {
+    layerList.innerHTML = "";
+    for (var i = layers.length - 1; i >= 0; i--) {
+      layerList.appendChild(buildLayerRow(layers[i]));
+    }
+  }
+
+  function selectLayer(layer) {
+    if (!layer) return;
+    selectedLayer = layer;
+    refreshLayerPanel();
+    updatePanelVisibility();
+    syncControlsFromLayer(layer);
+    updateCanvasCursor();
+  }
+
+  function reorderLayer(dragId, targetId) {
+    if (dragId === targetId) return;
+    var from = -1;
+    var to = -1;
+    for (var i = 0; i < layers.length; i++) {
+      if (layers[i].id === dragId) from = i;
+      if (layers[i].id === targetId) to = i;
+    }
+    if (from < 0 || to < 0) return;
+    var moved = layers.splice(from, 1)[0];
+    layers.splice(to, 0, moved);
+    refreshLayerPanel();
+    render();
+  }
+
+  function deleteLayer(layer) {
+    if (layers.length <= 1) return;
+    var index = layers.indexOf(layer);
+    if (index < 0) return;
+    if (layer.image && !window.confirm('Delete layer "' + (layer.name || layer.type) + '"?')) return;
+
+    layers.splice(index, 1);
+    if (selectedLayer === layer) selectedLayer = layers[Math.min(index, layers.length - 1)];
+    refreshLayerPanel();
+    updatePanelVisibility();
+    syncControlsFromLayer(selectedLayer);
+    updateCanvasCursor();
+    render();
+  }
+
+  function addTextLayer() {
+    var layer = createTextLayer();
+    var count = 0;
+    for (var i = 0; i < layers.length; i++) if (layers[i].type === "text") count++;
+    layer.name = "Text " + (count + 1);
+    layers.push(layer);
+    selectLayer(layer);
+    render();
+  }
+
+  function loadLayerImageFile(file) {
+    if (!file || !/^image\//.test(file.type)) return;
+
+    var reader = new FileReader();
+    reader.onload = function (evt) {
+      var dataUrl = evt.target.result;
+      var img = new Image();
+      img.onload = function () {
+        var layer = createImageLayer();
+        layer.image = img;
+        layer.src = dataUrl;
+        layer.name = file.name;
+        layers.push(layer);
+        selectLayer(layer);
+        render();
+      };
+      img.onerror = function () {
+        aiStatus.textContent = "Could not load that image";
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  }
+
   function buildPresets() {
     PRESETS.forEach(function (p) {
       var btn = document.createElement("button");
@@ -902,6 +1647,10 @@
       btn.addEventListener("click", function () {
         c1.value = p.from;
         c2.value = p.to;
+        if (selectedLayer && selectedLayer.type === "text") {
+          selectedLayer.color1 = p.from;
+          selectedLayer.color2 = p.to;
+        }
         markActivePreset();
         render();
       });
@@ -919,24 +1668,30 @@
     }
   }
 
-  function loadImageFile(file) {
+  function loadBackgroundFile(file) {
     if (!file || !/^image\//.test(file.type)) return;
 
     var reader = new FileReader();
-    reader.onload = function (e) {
+    reader.onload = function (evt) {
+      var dataUrl = evt.target.result;
       var img = new Image();
       img.onload = function () {
-        bgImage = img;
-        bgOffsetX = 0;
-        bgOffsetY = 0;
-        bgName.textContent = file.name + " — " + img.naturalWidth + "\u00d7" + img.naturalHeight;
-        canvas.classList.add("can-drag");
+        var layer = backgroundLayer() || createBackgroundLayer();
+        if (layers.indexOf(layer) < 0) layers.unshift(layer);
+        layer.image = img;
+        layer.src = dataUrl;
+        layer.name = file.name;
+        layer.x = 0;
+        layer.y = 0;
+        if (selectedLayer === layer) syncControlsFromLayer(layer);
+        refreshLayerPanel();
+        updateCanvasCursor();
         render();
       };
       img.onerror = function () {
         bgName.textContent = "Could not load that image";
       };
-      img.src = e.target.result;
+      img.src = dataUrl;
     };
     reader.readAsDataURL(file);
   }
@@ -961,6 +1716,8 @@
   }
 
   function reset() {
+    layers = [createBackgroundLayer(), defaultTextLayer()];
+
     line1.value = DEFAULTS.line1;
     line2.value = DEFAULTS.line2;
     line3.value = DEFAULTS.line3;
@@ -979,13 +1736,24 @@
     shadowYEl.value = DEFAULTS.shadowY;
     shadowBlurEl.value = DEFAULTS.shadowBlur;
     shadowColorEl.value = DEFAULTS.shadowColor;
-    bgOffsetX = 0;
-    bgOffsetY = 0;
+    imgXEl.value = 0;
+    imgYEl.value = 0;
+    imgScaleEl.value = 1;
+    imgStrokeWidthEl.value = 0;
+    imgStrokeColorEl.value = "#000000";
+    imgShadowXEl.value = 0;
+    imgShadowYEl.value = 0;
+    imgShadowBlurEl.value = 0;
+    imgShadowColorEl.value = "#000000";
+    bgInput.value = "";
+    bgName.textContent = "No image \u2014 solid black";
+    aiStatus.textContent = "";
 
     syncSliderLabels();
     updateCharCounts();
     markActivePreset();
     refreshSettingsStatus();
+    selectLayer(layers[1]);
     render();
   }
 
@@ -1025,7 +1793,7 @@
   function saveSettings() {
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(readSettings()));
-      settingsStatus.textContent = "Saved — will load next time you open this page.";
+      settingsStatus.textContent = "Saved \u2014 will load next time you open this page.";
     } catch (e) {
       settingsStatus.textContent = "This browser would not let settings be saved.";
     }
@@ -1045,65 +1813,160 @@
       return;
     }
 
-    syncSliderLabels();
+    var textLayer = firstTextLayer();
+    var bgLayer = backgroundLayer();
+    if (textLayer) syncLayerFromControls(textLayer);
+    if (bgLayer) {
+      bgLayer.overlay = Number(overlayEl.value);
+      bgLayer.overlayStart = Number(overlayStartEl.value);
+    }
+    if (selectedLayer === textLayer || selectedLayer === bgLayer) {
+      syncControlsFromLayer(selectedLayer);
+    }
+
     updateCharCounts();
     markActivePreset();
+    syncSliderLabels();
     render();
     settingsStatus.textContent = "Loaded your saved settings.";
   }
 
-  bgInput.addEventListener("change", function (e) {
-    loadImageFile(e.target.files && e.target.files[0]);
-  });
+  /* ---------------- AI background removal ---------------- */
 
-  clearBgBtn.addEventListener("click", function () {
-    bgImage = null;
-    bgOffsetX = 0;
-    bgOffsetY = 0;
-    bgInput.value = "";
-    bgName.textContent = "No image — solid black";
-    canvas.classList.remove("can-drag");
-    render();
-  });
+  var TRANSFORMERS_URL = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/+esm";
+  var MODEL_ID = "briaai/RMBG-1.4";
 
-  lines.forEach(function (input) {
-    input.addEventListener("input", function () {
-      updateCharCounts();
-      renderDebounced();
-    });
-  });
+  var transformersPromise = null;
+  var segmenterPromise = null;
+  var segmenter = null;
 
-  presetCjk.addEventListener("change", function () {
-    if (presetCjk.checked) {
-      line1.value = "直播一會";
-    } else if (line1.value === "直播一會") {
-      line1.value = "";
+  function updateAiStatus(text) {
+    aiStatus.textContent = text || "";
+  }
+
+  function loadTransformers() {
+    if (!transformersPromise) {
+      transformersPromise = import(TRANSFORMERS_URL).then(function (mod) {
+        mod.env.allowLocalModels = false;
+        mod.env.useBrowserCache = true;
+        return mod;
+      }).catch(function (err) {
+        transformersPromise = null;
+        throw err;
+      });
     }
-    updateCharCounts();
-    render();
-  });
+    return transformersPromise;
+  }
 
-  [c1, c2].forEach(function (input) {
-    input.addEventListener("input", function () {
-      markActivePreset();
-      renderDebounced();
+  function onModelProgress(p) {
+    if (!p) return;
+    if (p.status === "progress" && typeof p.progress === "number") {
+      updateAiStatus("Downloading AI model\u2026 " + Math.round(p.progress) + "%");
+    } else if (p.status === "ready") {
+      updateAiStatus("AI model ready.");
+    }
+  }
+
+  function getSegmenter() {
+    if (segmenter) return Promise.resolve(segmenter);
+    if (!segmenterPromise) {
+      segmenterPromise = loadTransformers().then(function (mod) {
+        return mod.pipeline("image-segmentation", MODEL_ID, { progress_callback: onModelProgress });
+      }).then(function (seg) {
+        segmenter = seg;
+        return seg;
+      }).catch(function (err) {
+        segmenterPromise = null;
+        throw err;
+      });
+    }
+    return segmenterPromise;
+  }
+
+  function maskToCanvas(mask) {
+    var w = mask.width;
+    var h = mask.height;
+    var c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+
+    var cx = c.getContext("2d");
+    var imageData = cx.createImageData(w, h);
+    var d = imageData.data;
+    var md = mask.data;
+    var channels = mask.channels || 1;
+    var isFloat = md instanceof Float32Array;
+    var n = w * h;
+
+    for (var i = 0; i < n; i++) {
+      var v = md[i * channels];
+      var a = isFloat ? Math.round(Math.max(0, Math.min(1, v)) * 255) : v;
+      d[i * 4] = 255;
+      d[i * 4 + 1] = 255;
+      d[i * 4 + 2] = 255;
+      d[i * 4 + 3] = a;
+    }
+
+    cx.putImageData(imageData, 0, 0);
+    return c;
+  }
+
+  function applyMaskToImage(img, mask) {
+    var iw = imgW(img);
+    var ih = imgH(img);
+
+    var out = document.createElement("canvas");
+    out.width = iw;
+    out.height = ih;
+
+    var cx = out.getContext("2d");
+    cx.drawImage(img, 0, 0, iw, ih);
+    cx.globalCompositeOperation = "destination-in";
+    cx.drawImage(maskToCanvas(mask), 0, 0, iw, ih);
+    cx.globalCompositeOperation = "source-over";
+
+    return out;
+  }
+
+  function layerInput(layer) {
+    if (layer.src) return layer.src;
+
+    var c = document.createElement("canvas");
+    c.width = imgW(layer.image);
+    c.height = imgH(layer.image);
+    c.getContext("2d").drawImage(layer.image, 0, 0);
+    return c;
+  }
+
+  function removeBackgroundFromLayer(layer) {
+    if (!layer || layer.type !== "image" || !layer.image || layer.busy) return;
+
+    layer.busy = true;
+    refreshLayerPanel();
+    updateAiStatus("Loading AI model\u2026");
+
+    getSegmenter().then(function (seg) {
+      updateAiStatus("Removing background\u2026");
+      return seg(layerInput(layer));
+    }).then(function (output) {
+      var mask = output && output[0] && output[0].mask;
+      if (!mask) throw new Error("the model returned no mask");
+
+      layer.image = applyMaskToImage(layer.image, mask);
+      layer.busy = false;
+      layer.name = (layer.name || "Image") + " (cutout)";
+      updateAiStatus("Background removed.");
+      refreshLayerPanel();
+      syncControlsFromLayer(selectedLayer === layer ? layer : selectedLayer);
+      render();
+    }).catch(function (err) {
+      layer.busy = false;
+      updateAiStatus("Background removal failed: " + (err && err.message ? err.message : "unknown error"));
+      refreshLayerPanel();
     });
-  });
+  }
 
-  [fontSizeEl, lineHeightEl, gradientAngleEl, textYEl, overlayEl, overlayStartEl, strokeWidthEl, shadowXEl, shadowYEl, shadowBlurEl].forEach(function (input) {
-    input.addEventListener("input", function () {
-      syncSliderLabels();
-      renderDebounced();
-    });
-  });
-
-  [strokeColorEl, shadowColorEl].forEach(function (input) {
-    input.addEventListener("input", renderDebounced);
-  });
-
-  downloadBtn.addEventListener("click", download);
-  resetBtn.addEventListener("click", reset);
-  saveSettingsBtn.addEventListener("click", saveSettings);
+  /* ---------------- Canvas dragging ---------------- */
 
   var dragState = null;
 
@@ -1115,15 +1978,34 @@
     };
   }
 
-  function isPannable() {
-    if (!bgImage) return false;
-    var r = coverRect(bgImage.naturalWidth, bgImage.naturalHeight, W, H);
+  function isPannable(layer) {
+    if (!layer.image || layer.type !== "background") return false;
+    var r = coverRect(imgW(layer.image), imgH(layer.image), W, H);
     return r.dw > W + 0.5 || r.dh > H + 0.5;
   }
 
+  function getDragTarget() {
+    if (!selectedLayer || selectedLayer.locked) return null;
+    if (selectedLayer.type === "background") return isPannable(selectedLayer) ? selectedLayer : null;
+    if (selectedLayer.type === "image") return selectedLayer.image ? selectedLayer : null;
+    return null;
+  }
+
+  function updateCanvasCursor() {
+    canvas.classList.toggle("can-drag", !!getDragTarget());
+  }
+
   canvas.addEventListener("pointerdown", function (e) {
-    if (!isPannable()) return;
-    dragState = { id: e.pointerId, x: e.clientX, y: e.clientY, ox: bgOffsetX, oy: bgOffsetY };
+    var layer = getDragTarget();
+    if (!layer) return;
+    dragState = {
+      layer: layer,
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      ox: Number(layer.x) || 0,
+      oy: Number(layer.y) || 0
+    };
     canvas.setPointerCapture(e.pointerId);
     canvas.classList.add("dragging");
     e.preventDefault();
@@ -1131,9 +2013,26 @@
 
   canvas.addEventListener("pointermove", function (e) {
     if (!dragState) return;
+
     var s = canvasScale();
-    bgOffsetX = dragState.ox + (e.clientX - dragState.x) * s.x;
-    bgOffsetY = dragState.oy + (e.clientY - dragState.y) * s.y;
+    var dx = (e.clientX - dragState.x) * s.x;
+    var dy = (e.clientY - dragState.y) * s.y;
+    var layer = dragState.layer;
+
+    if (layer.type === "background") {
+      var r = coverRect(imgW(layer.image), imgH(layer.image), W, H);
+      var nx = dragState.ox + dx;
+      var ny = dragState.oy + dy;
+      var cx = Math.min(0, Math.max(W - r.dw, r.dx + nx));
+      var cy = Math.min(0, Math.max(H - r.dh, r.dy + ny));
+      layer.x = cx - r.dx;
+      layer.y = cy - r.dy;
+    } else {
+      layer.x = dragState.ox + dx;
+      layer.y = dragState.oy + dy;
+      if (selectedLayer === layer) syncImageControls(layer);
+    }
+
     render();
   });
 
@@ -1149,6 +2048,151 @@
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
 
+  /* ---------------- Control wiring ---------------- */
+
+  bgInput.addEventListener("change", function (e) {
+    loadBackgroundFile(e.target.files && e.target.files[0]);
+  });
+
+  clearBgBtn.addEventListener("click", function () {
+    var layer = backgroundLayer();
+    if (layer) {
+      layer.image = null;
+      layer.src = null;
+      layer.x = 0;
+      layer.y = 0;
+    }
+    bgInput.value = "";
+    bgName.textContent = "No image \u2014 solid black";
+    updateCanvasCursor();
+    render();
+  });
+
+  lines.forEach(function (input) {
+    input.addEventListener("input", function () {
+      if (selectedLayer && selectedLayer.type === "text") {
+        selectedLayer.text = [line1.value, line2.value, line3.value];
+      }
+      updateCharCounts();
+      renderDebounced();
+    });
+  });
+
+  presetCjk.addEventListener("change", function () {
+    if (selectedLayer && selectedLayer.type === "text") {
+      if (presetCjk.checked) {
+        line1.value = "直播一會";
+      } else if (line1.value === "直播一會") {
+        line1.value = "";
+      }
+      selectedLayer.text = [line1.value, line2.value, line3.value];
+      selectedLayer.presetCjk = presetCjk.checked;
+    }
+    updateCharCounts();
+    render();
+  });
+
+  [c1, c2].forEach(function (input) {
+    input.addEventListener("input", function () {
+      if (selectedLayer && selectedLayer.type === "text") {
+        selectedLayer.color1 = c1.value;
+        selectedLayer.color2 = c2.value;
+      }
+      markActivePreset();
+      renderDebounced();
+    });
+  });
+
+  function bindTextSlider(el, prop) {
+    el.addEventListener("input", function () {
+      if (selectedLayer && selectedLayer.type === "text") selectedLayer[prop] = Number(el.value);
+      syncSliderLabels();
+      renderDebounced();
+    });
+  }
+
+  bindTextSlider(gradientAngleEl, "gradientAngle");
+  bindTextSlider(fontSizeEl, "fontSize");
+  bindTextSlider(lineHeightEl, "lineHeight");
+  bindTextSlider(textYEl, "textY");
+  bindTextSlider(strokeWidthEl, "strokeWidth");
+  bindTextSlider(shadowXEl, "shadowX");
+  bindTextSlider(shadowYEl, "shadowY");
+  bindTextSlider(shadowBlurEl, "shadowBlur");
+
+  strokeColorEl.addEventListener("input", function () {
+    if (selectedLayer && selectedLayer.type === "text") selectedLayer.strokeColor = strokeColorEl.value;
+    renderDebounced();
+  });
+
+  shadowColorEl.addEventListener("input", function () {
+    if (selectedLayer && selectedLayer.type === "text") selectedLayer.shadowColor = shadowColorEl.value;
+    renderDebounced();
+  });
+
+  function bindOverlaySlider(el, prop) {
+    el.addEventListener("input", function () {
+      if (selectedLayer && selectedLayer.type === "background") selectedLayer[prop] = Number(el.value);
+      syncSliderLabels();
+      renderDebounced();
+    });
+  }
+
+  bindOverlaySlider(overlayEl, "overlay");
+  bindOverlaySlider(overlayStartEl, "overlayStart");
+
+  function formatImageValue(prop, value) {
+    if (prop === "scale") return Number(value).toFixed(2) + "\u00d7";
+    return Math.round(Number(value)) + "px";
+  }
+
+  function bindImageSlider(el, prop, labelEl) {
+    el.addEventListener("input", function () {
+      if (selectedLayer && selectedLayer.type === "image") {
+        selectedLayer[prop] = Number(el.value);
+        labelEl.textContent = formatImageValue(prop, el.value);
+      }
+      renderDebounced();
+    });
+  }
+
+  bindImageSlider(imgXEl, "x", imgXVal);
+  bindImageSlider(imgYEl, "y", imgYVal);
+  bindImageSlider(imgScaleEl, "scale", imgScaleVal);
+  bindImageSlider(imgStrokeWidthEl, "strokeWidth", imgStrokeWidthVal);
+  bindImageSlider(imgShadowXEl, "shadowX", imgShadowXVal);
+  bindImageSlider(imgShadowYEl, "shadowY", imgShadowYVal);
+  bindImageSlider(imgShadowBlurEl, "shadowBlur", imgShadowBlurVal);
+
+  imgStrokeColorEl.addEventListener("input", function () {
+    if (selectedLayer && selectedLayer.type === "image") selectedLayer.strokeColor = imgStrokeColorEl.value;
+    renderDebounced();
+  });
+
+  imgShadowColorEl.addEventListener("input", function () {
+    if (selectedLayer && selectedLayer.type === "image") selectedLayer.shadowColor = imgShadowColorEl.value;
+    renderDebounced();
+  });
+
+  removeBgBtn.addEventListener("click", function () {
+    if (selectedLayer && selectedLayer.type === "image") removeBackgroundFromLayer(selectedLayer);
+  });
+
+  addImageLayerBtn.addEventListener("click", function () {
+    layerImageInput.click();
+  });
+
+  layerImageInput.addEventListener("change", function (e) {
+    loadLayerImageFile(e.target.files && e.target.files[0]);
+    layerImageInput.value = "";
+  });
+
+  addTextLayerBtn.addEventListener("click", addTextLayer);
+
+  downloadBtn.addEventListener("click", download);
+  resetBtn.addEventListener("click", reset);
+  saveSettingsBtn.addEventListener("click", saveSettings);
+
   buildPresets();
   reset();
   loadSavedSettings();
@@ -1162,7 +2206,7 @@
     e.preventDefault();
     var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (file && /^image\//.test(file.type)) {
-      loadImageFile(file);
+      loadBackgroundFile(file);
     }
   });
 })();
