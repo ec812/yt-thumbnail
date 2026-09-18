@@ -461,9 +461,9 @@
       <div class="field">
         <div class="label-row">
           <label for="gradientAngle">Angle</label>
-          <span class="value" id="gradientAngleVal">0&deg;</span>
+          <span class="value" id="gradientAngleVal">90&deg;</span>
         </div>
-        <input type="range" id="gradientAngle" min="0" max="360" step="1" value="0" />
+        <input type="range" id="gradientAngle" min="0" max="360" step="1" value="90" />
       </div>
     </fieldset>
 
@@ -474,9 +474,9 @@
       <div class="field">
         <div class="label-row">
           <label for="strokeWidth">Width</label>
-          <span class="value" id="strokeWidthVal">0px</span>
+          <span class="value" id="strokeWidthVal">8px</span>
         </div>
-        <input type="range" id="strokeWidth" min="0" max="24" step="1" value="0" />
+        <input type="range" id="strokeWidth" min="0" max="24" step="1" value="8" />
       </div>
       <div class="field">
         <label for="strokeColor">Color</label>
@@ -507,13 +507,13 @@
       <div class="field">
         <div class="label-row">
           <label for="shadowBlur">Blur</label>
-          <span class="value" id="shadowBlurVal">0px</span>
+          <span class="value" id="shadowBlurVal">3px</span>
         </div>
-        <input type="range" id="shadowBlur" min="0" max="60" step="1" value="0" />
+        <input type="range" id="shadowBlur" min="0" max="60" step="1" value="3" />
       </div>
       <div class="field">
         <label for="shadowColor">Color</label>
-        <input type="color" id="shadowColor" value="#000000" />
+        <input type="color" id="shadowColor" value="#ffffff" />
       </div>
     </fieldset>
 
@@ -524,23 +524,23 @@
       <div class="field">
         <div class="label-row">
           <label for="fontSize">Font size</label>
-          <span class="value" id="fontSizeVal">72px</span>
+          <span class="value" id="fontSizeVal">96px</span>
         </div>
-        <input type="range" id="fontSize" min="20" max="120" step="1" value="72" />
+        <input type="range" id="fontSize" min="20" max="120" step="1" value="96" />
       </div>
       <div class="field">
         <div class="label-row">
           <label for="lineHeight">Line height</label>
-          <span class="value" id="lineHeightVal">1.4</span>
+          <span class="value" id="lineHeightVal">1.2</span>
         </div>
-        <input type="range" id="lineHeight" min="1" max="3" step="0.1" value="1.4" />
+        <input type="range" id="lineHeight" min="1" max="3" step="0.1" value="1.2" />
       </div>
       <div class="field">
         <div class="label-row">
           <label for="textY">Vertical position</label>
-          <span class="value" id="textYVal">62%</span>
+          <span class="value" id="textYVal">93%</span>
         </div>
-        <input type="range" id="textY" min="0" max="100" step="1" value="62" />
+        <input type="range" id="textY" min="0" max="100" step="1" value="93" />
       </div>
       <div class="field">
         <div class="label-row">
@@ -552,9 +552,9 @@
       <div class="field">
         <div class="label-row">
           <label for="overlayStart">Overlay start</label>
-          <span class="value" id="overlayStartVal">0%</span>
+          <span class="value" id="overlayStartVal">65%</span>
         </div>
-        <input type="range" id="overlayStart" min="0" max="100" step="1" value="0" />
+        <input type="range" id="overlayStart" min="0" max="100" step="1" value="65" />
       </div>
     </fieldset>
 
@@ -563,6 +563,8 @@
     <fieldset>
       <legend>Export</legend>
       <button class="primary" type="button" id="download">Download PNG</button>
+      <button class="ghost" type="button" id="saveSettings">Save settings</button>
+      <div class="meta" id="settingsStatus">Settings are not saved yet.</div>
       <button class="ghost" type="button" id="reset">Reset to defaults</button>
     </fieldset>
   </aside>
@@ -626,6 +628,18 @@
 
   var downloadBtn = document.getElementById("download");
   var resetBtn = document.getElementById("reset");
+  var saveSettingsBtn = document.getElementById("saveSettings");
+  var settingsStatus = document.getElementById("settingsStatus");
+
+  var SETTINGS_KEY = "yt-thumbnail-generator:settings";
+  var SETTINGS_FIELDS = [
+    "line1", "line2", "line3", "presetCjk",
+    "c1", "c2", "gradientAngle",
+    "fontSize", "lineHeight", "textY",
+    "overlay", "overlayStart",
+    "strokeWidth", "strokeColor",
+    "shadowX", "shadowY", "shadowBlur", "shadowColor"
+  ];
 
   var DEFAULTS = {
     line1: "BUILD AN APP",
@@ -633,18 +647,18 @@
     line3: "",
     color1: "#ffd54f",
     color2: "#ff3d00",
-    gradientAngle: 0,
-    fontSize: 72,
-    lineHeight: 1.4,
-    textY: 62,
+    gradientAngle: 90,
+    fontSize: 96,
+    lineHeight: 1.2,
+    textY: 93,
     overlay: 70,
-    overlayStart: 0,
-    strokeWidth: 0,
+    overlayStart: 65,
+    strokeWidth: 8,
     strokeColor: "#000000",
     shadowX: 0,
     shadowY: 0,
-    shadowBlur: 0,
-    shadowColor: "#000000"
+    shadowBlur: 3,
+    shadowColor: "#ffffff"
   };
 
   var PRESETS = [
@@ -973,6 +987,57 @@
     render();
   }
 
+  function readSettings() {
+    return SETTINGS_FIELDS.map(function (id) {
+      var el = document.getElementById(id);
+      return el.type === "checkbox" ? el.checked : el.value;
+    });
+  }
+
+  function applySettings(values) {
+    if (!values || values.length !== SETTINGS_FIELDS.length) return false;
+
+    SETTINGS_FIELDS.forEach(function (id, i) {
+      var el = document.getElementById(id);
+      if (el.type === "checkbox") {
+        el.checked = Boolean(values[i]);
+      } else {
+        el.value = String(values[i]);
+      }
+    });
+    return true;
+  }
+
+  function saveSettings() {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(readSettings()));
+      settingsStatus.textContent = "Saved — will load next time you open this page.";
+    } catch (e) {
+      settingsStatus.textContent = "This browser would not let settings be saved.";
+    }
+  }
+
+  function loadSavedSettings() {
+    var values = null;
+    try {
+      var raw = localStorage.getItem(SETTINGS_KEY);
+      if (raw) values = JSON.parse(raw);
+    } catch (e) {
+      values = null;
+    }
+
+    if (!applySettings(values)) {
+      settingsStatus.textContent = "Settings are not saved yet.";
+      return;
+    }
+
+    syncSliderLabels();
+    updateCharCounts();
+    markActivePreset();
+    render();
+    settingsStatus.textContent = "Loaded your saved settings.";
+  }
+
   bgInput.addEventListener("change", function (e) {
     loadImageFile(e.target.files && e.target.files[0]);
   });
@@ -1024,6 +1089,7 @@
 
   downloadBtn.addEventListener("click", download);
   resetBtn.addEventListener("click", reset);
+  saveSettingsBtn.addEventListener("click", saveSettings);
 
   var dragState = null;
 
@@ -1071,6 +1137,7 @@
 
   buildPresets();
   reset();
+  loadSavedSettings();
 
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () { render(); });
