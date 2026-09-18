@@ -6,7 +6,7 @@ A single-file web app for composing YouTube thumbnails with layered compositing,
 
 ## Features
 
-- **Layers** — stack background, image, color, and text layers; reorder, show/hide, lock, and delete from the Layers panel
+- **Layers** — stack background, image, color, and text layers; reorder, show/hide, lock, and delete from the Layers panel; double-click a row to rename it; an alpha checkerboard sits behind the layers so anything not fully opaque reads at a glance
 - **Background layer** — upload any image, drag to reposition, cover-scaled to 1280×720, with adjustable overlay gradient
 - **Image layers** — add cutouts or overlays with position, scale, stroke, shadow, opacity, blending mode, and clipping masks (circle, square, rectangle, triangle, custom crop); drag on canvas to move
 - **Color layers** — fill the whole canvas with a solid color, with adjustable opacity and 16 Photoshop-style blending modes (Multiply, Screen, Overlay, Color Dodge, Hard Light, Hue, Luminosity, …)
@@ -71,6 +71,7 @@ Sample text: `BUILD AN APP` / `IN 10 MINUTES`
 
 ```
 index.html          # The entire app (HTML + CSS + JS)
+img/alpha.jpg       # Alpha checkerboard tile (preview backdrop, never exported)
 docs/plans/         # Implementation plans
 README.md           # This file
 AGENTS.md           # AI agent context

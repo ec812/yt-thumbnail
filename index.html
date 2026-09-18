@@ -570,6 +570,27 @@
     white-space: nowrap;
   }
 
+  input.layer-name-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    margin: 0;
+    padding: 1px 6px;
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: 5px;
+    outline: none;
+    box-shadow: none;
+  }
+
+  input.layer-name-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(255, 87, 34, 0.2);
+  }
+
   .layer-badge {
     flex: 0 0 auto;
     font-size: 9px;
@@ -1803,6 +1824,42 @@
     }
   }
 
+  /* ---------------- Alpha checkerboard backdrop ---------------- */
+
+  var ALPHA_BG_SRC = "img/alpha.jpg";
+  var alphaBgImage = new Image();
+  var alphaBgPattern = null;
+
+  alphaBgImage.onload = function () {
+    // repeat in both x and y across the whole canvas
+    alphaBgPattern = ctx.createPattern(alphaBgImage, "repeat");
+    render();
+  };
+  alphaBgImage.onerror = function () {
+    alphaBgPattern = null;
+  };
+  alphaBgImage.src = ALPHA_BG_SRC;
+
+  // The checkerboard is a preview affordance rather than part of the image:
+  // it sits behind every layer so anything not fully opaque reads as such.
+  // It is sized in CSS pixels, so it keeps the same size on screen when the
+  // preview scales with the window (Photoshop's transparency grid behaves the
+  // same way). Exports suppress it -- see renderForExport().
+  function drawBackdrop() {
+    if (!alphaBgPattern) {
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, W, H);
+      return;
+    }
+    var s = W / (canvas.getBoundingClientRect().width || W);
+    if (!(s > 0)) s = 1;
+    ctx.save();
+    ctx.scale(s, s);
+    ctx.fillStyle = alphaBgPattern;
+    ctx.fillRect(0, 0, W / s, H / s);
+    ctx.restore();
+  }
+
   function render() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = "source-over";
@@ -1813,8 +1870,7 @@
     ctx.shadowOffsetY = 0;
 
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, W, H);
+    drawBackdrop();
 
     var i;
     var layer;
@@ -2091,7 +2147,22 @@
     row.appendChild(badge);
     row.appendChild(del);
 
-    row.addEventListener("click", function () { selectLayer(layer); });
+    row.addEventListener("click", function (e) {
+      // selectLayer rebuilds every row, so a native dblclick never reaches the
+      // same node twice -- detect the second click by hand instead
+      var now = Date.now();
+      var isSecond = lastRowClick.id === layer.id &&
+        now - lastRowClick.time < 400 &&
+        Math.abs(e.clientX - lastRowClick.x) < 6 &&
+        Math.abs(e.clientY - lastRowClick.y) < 6;
+      lastRowClick = { id: layer.id, time: now, x: e.clientX, y: e.clientY };
+
+      selectLayer(layer);
+      if (isSecond) {
+        var freshRow = rowForLayer(layer);
+        if (freshRow) startLayerRename(layer, freshRow);
+      }
+    });
 
     row.addEventListener("dragstart", function (e) {
       dragLayerId = layer.id;
@@ -2126,6 +2197,75 @@
     for (var i = layers.length - 1; i >= 0; i--) {
       layerList.appendChild(buildLayerRow(layers[i]));
     }
+  }
+
+  var lastRowClick = { id: null, time: 0, x: 0, y: 0 };
+
+  function rowForLayer(layer) {
+    var rows = layerList.querySelectorAll(".layer-row");
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].dataset.id === layer.id) return rows[i];
+    }
+    return null;
+  }
+
+  // inline rename: swaps the name label for a text input, committing on
+  // Enter/blur and reverting on Escape
+  function startLayerRename(layer, row) {
+    if (!row || row.querySelector(".layer-name-input")) return;
+    var nameEl = row.querySelector(".layer-name");
+    if (!nameEl) return;
+
+    var input = document.createElement("input");
+    input.type = "text";
+    input.className = "layer-name-input";
+    input.value = layer.name || layer.type;
+    input.maxLength = 60;
+    input.spellcheck = false;
+
+    var done = false;
+    function finish(commit) {
+      if (done) return;
+      done = true;
+
+      var value = input.value.trim();
+      if (commit && value && value !== layer.name) {
+        pushUndo();
+        layer.name = value;
+        scheduleAutoSave();
+      }
+
+      var span = document.createElement("span");
+      span.className = "layer-name";
+      span.textContent = layer.name || layer.type;
+      if (input.parentNode) input.parentNode.replaceChild(span, input);
+      row.draggable = true;
+    }
+
+    input.addEventListener("keydown", function (e) {
+      e.stopPropagation();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        finish(true);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        finish(false);
+      }
+    });
+    input.addEventListener("blur", function () { finish(true); });
+    // the row's own handlers must not fire while editing (selecting the layer
+    // would rebuild the panel and tear the input down mid-edit)
+    ["pointerdown", "click", "dblclick", "dragstart"].forEach(function (type) {
+      input.addEventListener(type, function (e) {
+        e.stopPropagation();
+        if (type === "dragstart") e.preventDefault();
+      });
+    });
+
+    row.draggable = false;
+    nameEl.parentNode.replaceChild(input, nameEl);
+    input.focus();
+    input.select();
   }
 
   function selectLayer(layer) {
@@ -2293,13 +2433,32 @@
     reader.readAsDataURL(file);
   }
 
+  // paints the project to a scratch canvas with the preview-only checkerboard
+  // suppressed, so exports are exactly the composed layers on a black ground
+  function renderForExport() {
+    var out = document.createElement("canvas");
+    out.width = W;
+    out.height = H;
+
+    var mainCtx = ctx;
+    var savedPattern = alphaBgPattern;
+    ctx = out.getContext("2d");
+    alphaBgPattern = null;
+    render();
+    ctx = mainCtx;
+    alphaBgPattern = savedPattern;
+
+    return out;
+  }
+
   function download() {
-    if (typeof canvas.toBlob !== "function") {
+    var out = renderForExport();
+    if (typeof out.toBlob !== "function") {
       alert("Canvas export is not supported in this browser.");
       return;
     }
 
-    canvas.toBlob(function (blob) {
+    out.toBlob(function (blob) {
       if (!blob) return;
       var url = URL.createObjectURL(blob);
       var a = document.createElement("a");
@@ -3623,6 +3782,10 @@
       loadBackgroundFile(file);
     }
   });
+
+  // the checkerboard is sized in CSS pixels, so it has to be redrawn when the
+  // preview changes size
+  window.addEventListener("resize", renderDebounced);
 })();
 </script>
 </body>
