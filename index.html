@@ -270,6 +270,25 @@
     border-radius: 6px;
   }
 
+  select {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 9px 11px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(255, 87, 34, 0.16);
+  }
+
   input[type="range"] {
     -webkit-appearance: none;
     appearance: none;
@@ -610,6 +629,7 @@
         <div class="layer-add">
           <button class="mini" type="button" id="addImageLayer">+ Image</button>
           <button class="mini" type="button" id="addTextLayer">+ Text</button>
+          <button class="mini" type="button" id="addColorLayer">+ Color</button>
         </div>
       </div>
       <div class="layer-list" id="layerList"></div>
@@ -780,6 +800,17 @@
       <div class="meta" id="imageMeta">No image</div>
       <div class="field">
         <div class="label-row">
+          <label for="imgOpacity">Opacity</label>
+          <span class="value" id="imgOpacityVal">100%</span>
+        </div>
+        <input type="range" id="imgOpacity" min="0" max="100" step="1" value="100" />
+      </div>
+      <div class="field">
+        <label for="imgBlend">Blending mode</label>
+        <select id="imgBlend"></select>
+      </div>
+      <div class="field">
+        <div class="label-row">
           <label for="imgX">Position X</label>
           <span class="value" id="imgXVal">0px</span>
         </div>
@@ -855,6 +886,27 @@
     </fieldset>
 
     <div class="divider" data-for="image"></div>
+
+    <div class="divider" data-for="color"></div>
+
+    <fieldset data-for="color">
+      <legend>Color layer</legend>
+      <div class="field">
+        <label for="colorValue">Color</label>
+        <input type="color" id="colorValue" value="#ff0000" />
+      </div>
+      <div class="field">
+        <div class="label-row">
+          <label for="colorOpacity">Opacity</label>
+          <span class="value" id="colorOpacityVal">100%</span>
+        </div>
+        <input type="range" id="colorOpacity" min="0" max="100" step="1" value="100" />
+      </div>
+      <div class="field">
+        <label for="colorBlend">Blending mode</label>
+        <select id="colorBlend"></select>
+      </div>
+    </fieldset>
 
     <fieldset>
       <legend>Export</legend>
@@ -951,6 +1003,9 @@
   var imgShadowColorEl = document.getElementById("imgShadowColor");
   var imgEraseRadiusEl = document.getElementById("imgEraseRadius");
   var imgEraseRadiusVal = document.getElementById("imgEraseRadiusVal");
+  var imgOpacityEl = document.getElementById("imgOpacity");
+  var imgOpacityVal = document.getElementById("imgOpacityVal");
+  var imgBlendEl = document.getElementById("imgBlend");
   var eraserToggleBtn = document.getElementById("eraserToggle");
   var eraserDoneBtn = document.getElementById("eraserDone");
   var eraserHint = document.getElementById("eraserHint");
@@ -958,10 +1013,15 @@
   var imageMeta = document.getElementById("imageMeta");
   var removeBgBtn = document.getElementById("removeBg");
   var aiStatus = document.getElementById("aiStatus");
+  var colorValueEl = document.getElementById("colorValue");
+  var colorOpacityEl = document.getElementById("colorOpacity");
+  var colorOpacityVal = document.getElementById("colorOpacityVal");
+  var colorBlendEl = document.getElementById("colorBlend");
 
   var layerList = document.getElementById("layerList");
   var addImageLayerBtn = document.getElementById("addImageLayer");
   var addTextLayerBtn = document.getElementById("addTextLayer");
+  var addColorLayerBtn = document.getElementById("addColorLayer");
   var layerImageInput = document.getElementById("layerImageInput");
 
   var downloadBtn = document.getElementById("download");
@@ -1014,6 +1074,35 @@
     { name: "Lime", from: "#d4ff00", to: "#00a86b" },
     { name: "Bubblegum", from: "#ff8ad8", to: "#8e24aa" }
   ];
+
+  // Photoshop-style blending modes mapped to their canvas composite operation
+  var BLEND_MODES = [
+    { name: "Normal", value: "source-over" },
+    { name: "Multiply", value: "multiply" },
+    { name: "Screen", value: "screen" },
+    { name: "Overlay", value: "overlay" },
+    { name: "Darken", value: "darken" },
+    { name: "Lighten", value: "lighten" },
+    { name: "Color Dodge", value: "color-dodge" },
+    { name: "Color Burn", value: "color-burn" },
+    { name: "Hard Light", value: "hard-light" },
+    { name: "Soft Light", value: "soft-light" },
+    { name: "Difference", value: "difference" },
+    { name: "Exclusion", value: "exclusion" },
+    { name: "Hue", value: "hue" },
+    { name: "Saturation", value: "saturation" },
+    { name: "Color", value: "color" },
+    { name: "Luminosity", value: "luminosity" }
+  ];
+
+  function buildBlendOptions(select) {
+    BLEND_MODES.forEach(function (m) {
+      var opt = document.createElement("option");
+      opt.value = m.value;
+      opt.textContent = m.name;
+      select.appendChild(opt);
+    });
+  }
 
   var ICONS = {
     eye: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>',
@@ -1123,7 +1212,22 @@
       shadowBlur: 0,
       shadowColor: "#000000",
       eraseRadius: 20,
+      opacity: 100,
+      blendMode: "source-over",
       busy: false
+    };
+  }
+
+  function createColorLayer() {
+    return {
+      id: nextId(),
+      type: "color",
+      visible: true,
+      locked: false,
+      name: "Color",
+      color: "#ff0000",
+      opacity: 100,
+      blendMode: "source-over"
     };
   }
 
@@ -1269,6 +1373,11 @@
     }
   }
 
+  function drawColorLayer(layer) {
+    ctx.fillStyle = layer.color || "#ff0000";
+    ctx.fillRect(0, 0, W, H);
+  }
+
   function drawOverlayPass() {
     var layer = backgroundLayer();
     if (!layer || !layer.visible) return;
@@ -1407,12 +1516,22 @@
     var i;
     var layer;
 
-    // image layers (background + image), bottom to top
+    // image, background and color layers, bottom to top
     for (i = 0; i < layers.length; i++) {
       layer = layers[i];
       if (!layer.visible || layer.type === "text") continue;
-      if (layer.type === "background") drawBackgroundLayer(layer);
+      if (layer.type === "background") {
+        drawBackgroundLayer(layer);
+        continue;
+      }
+      // image and color layers composite with their own opacity and blending mode
+      var opacity = layer.opacity === undefined ? 100 : Number(layer.opacity);
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, opacity / 100));
+      ctx.globalCompositeOperation = layer.blendMode || "source-over";
+      if (layer.type === "color") drawColorLayer(layer);
       else drawImageLayer(layer);
+      ctx.restore();
     }
 
     // the overlay always sits above every image layer and below every text layer
@@ -1472,6 +1591,8 @@
     imgShadowBlurEl.value = Number(layer.shadowBlur) || 0;
     imgShadowColorEl.value = layer.shadowColor || "#000000";
     imgEraseRadiusEl.value = Number(layer.eraseRadius) || 20;
+    imgOpacityEl.value = layer.opacity === undefined ? 100 : layer.opacity;
+    imgBlendEl.value = layer.blendMode || "source-over";
     syncImageLabels();
   }
 
@@ -1484,6 +1605,7 @@
     imgShadowYVal.textContent = imgShadowYEl.value + "px";
     imgShadowBlurVal.textContent = imgShadowBlurEl.value + "px";
     imgEraseRadiusVal.textContent = imgEraseRadiusEl.value + "px";
+    imgOpacityVal.textContent = imgOpacityEl.value + "%";
   }
 
   function syncControlsFromLayer(layer) {
@@ -1519,6 +1641,11 @@
       imageMeta.textContent = layer.image
         ? (layer.name + " \u2014 " + imgW(layer.image) + "\u00d7" + imgH(layer.image))
         : "No image";
+    } else if (layer.type === "color") {
+      colorValueEl.value = layer.color || "#ff0000";
+      colorOpacityEl.value = layer.opacity === undefined ? 100 : layer.opacity;
+      colorBlendEl.value = layer.blendMode || "source-over";
+      colorOpacityVal.textContent = colorOpacityEl.value + "%";
     }
 
     syncSliderLabels();
@@ -1558,6 +1685,12 @@
       layer.shadowBlur = Number(imgShadowBlurEl.value);
       layer.shadowColor = imgShadowColorEl.value;
       layer.eraseRadius = Number(imgEraseRadiusEl.value);
+      layer.opacity = Number(imgOpacityEl.value);
+      layer.blendMode = imgBlendEl.value;
+    } else if (layer.type === "color") {
+      layer.color = colorValueEl.value;
+      layer.opacity = Number(colorOpacityEl.value);
+      layer.blendMode = colorBlendEl.value;
     }
   }
 
@@ -1733,6 +1866,17 @@
     render();
   }
 
+  function addColorLayer() {
+    pushUndo();
+    var layer = createColorLayer();
+    var count = 0;
+    for (var i = 0; i < layers.length; i++) if (layers[i].type === "color") count++;
+    layer.name = "Color " + (count + 1);
+    layers.push(layer);
+    selectLayer(layer);
+    render();
+  }
+
   function loadLayerImageFile(file) {
     if (!file || !/^image\//.test(file.type)) return;
 
@@ -1882,11 +2026,18 @@
     imgShadowBlurEl.value = 0;
     imgShadowColorEl.value = "#000000";
     imgEraseRadiusEl.value = 20;
+    imgOpacityEl.value = 100;
+    imgBlendEl.value = "source-over";
+    colorValueEl.value = "#ff0000";
+    colorOpacityEl.value = 100;
+    colorBlendEl.value = "source-over";
     bgInput.value = "";
     bgName.textContent = "No image \u2014 solid black";
     aiStatus.textContent = "";
 
     syncSliderLabels();
+    syncImageLabels();
+    colorOpacityVal.textContent = colorOpacityEl.value + "%";
     updateCharCounts();
     markActivePreset();
     refreshSettingsStatus();
@@ -2445,6 +2596,13 @@
           s.shadowBlur = layer.shadowBlur;
           s.shadowColor = layer.shadowColor;
           s.eraseRadius = layer.eraseRadius;
+          s.opacity = layer.opacity === undefined ? 100 : layer.opacity;
+          s.blendMode = layer.blendMode || "source-over";
+        }
+        if (layer.type === "color") {
+          s.color = layer.color;
+          s.opacity = layer.opacity === undefined ? 100 : layer.opacity;
+          s.blendMode = layer.blendMode || "source-over";
         }
         return s;
       }),
@@ -2477,6 +2635,8 @@
         layer = createTextLayer();
       } else if (s.type === "image") {
         layer = createImageLayer();
+      } else if (s.type === "color") {
+        layer = createColorLayer();
       } else {
         continue;
       }
@@ -2526,6 +2686,14 @@
         layer.shadowBlur = s.shadowBlur || 0;
         layer.shadowColor = s.shadowColor || "#000000";
         layer.eraseRadius = s.eraseRadius || 20;
+        layer.opacity = s.opacity !== undefined ? s.opacity : 100;
+        layer.blendMode = s.blendMode || "source-over";
+      }
+
+      if (s.type === "color") {
+        layer.color = s.color || "#ff0000";
+        layer.opacity = s.opacity !== undefined ? s.opacity : 100;
+        layer.blendMode = s.blendMode || "source-over";
       }
 
       newLayers.push(layer);
@@ -2938,6 +3106,48 @@
     renderDebounced();
   });
 
+  imgOpacityEl.addEventListener("input", function () {
+    if (selectedLayer && selectedLayer.type === "image") {
+      beginEdit();
+      selectedLayer.opacity = Number(imgOpacityEl.value);
+    }
+    imgOpacityVal.textContent = imgOpacityEl.value + "%";
+    renderDebounced();
+  });
+
+  imgBlendEl.addEventListener("change", function () {
+    if (selectedLayer && selectedLayer.type === "image") {
+      pushUndo();
+      selectedLayer.blendMode = imgBlendEl.value;
+    }
+    render();
+  });
+
+  colorValueEl.addEventListener("input", function () {
+    if (selectedLayer && selectedLayer.type === "color") {
+      beginEdit();
+      selectedLayer.color = colorValueEl.value;
+    }
+    renderDebounced();
+  });
+
+  colorOpacityEl.addEventListener("input", function () {
+    if (selectedLayer && selectedLayer.type === "color") {
+      beginEdit();
+      selectedLayer.opacity = Number(colorOpacityEl.value);
+    }
+    colorOpacityVal.textContent = colorOpacityEl.value + "%";
+    renderDebounced();
+  });
+
+  colorBlendEl.addEventListener("change", function () {
+    if (selectedLayer && selectedLayer.type === "color") {
+      pushUndo();
+      selectedLayer.blendMode = colorBlendEl.value;
+    }
+    render();
+  });
+
   removeBgBtn.addEventListener("click", function () {
     if (selectedLayer && selectedLayer.type === "image") removeBackgroundFromLayer(selectedLayer);
   });
@@ -2962,6 +3172,7 @@
   });
 
   addTextLayerBtn.addEventListener("click", addTextLayer);
+  addColorLayerBtn.addEventListener("click", addColorLayer);
 
   downloadBtn.addEventListener("click", download);
   resetBtn.addEventListener("click", reset);
@@ -2997,6 +3208,8 @@
     }
   });
 
+  buildBlendOptions(imgBlendEl);
+  buildBlendOptions(colorBlendEl);
   buildPresets();
   reset();
   loadSavedSettings();

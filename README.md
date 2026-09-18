@@ -6,9 +6,10 @@ A single-file web app for composing YouTube thumbnails with layered compositing,
 
 ## Features
 
-- **Layers** — stack background, image, and text layers; reorder, show/hide, lock, and delete from the Layers panel
+- **Layers** — stack background, image, color, and text layers; reorder, show/hide, lock, and delete from the Layers panel
 - **Background layer** — upload any image, drag to reposition, cover-scaled to 1280×720, with adjustable overlay gradient
-- **Image layers** — add cutouts or overlays with position, scale, stroke, and shadow; drag on canvas to move
+- **Image layers** — add cutouts or overlays with position, scale, stroke, shadow, opacity, and blending mode; drag on canvas to move
+- **Color layers** — fill the whole canvas with a solid color, with adjustable opacity and 16 Photoshop-style blending modes (Multiply, Screen, Overlay, Color Dodge, Hard Light, Hue, Luminosity, …)
 - **AI background removal** — one-click cutout via `briaai/RMBG-1.4` (runs in browser, model cached after first download)
 - **Text layers** — 3 lines, Noto Sans TC font, with a 直播一會 checkbox preset (renders line 1 in solid white)
 - **Gradient text** — two-color linear gradient clipped to text glyphs, adjustable angle (0–360°), 4 presets
