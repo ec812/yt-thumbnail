@@ -15,8 +15,8 @@
     --border: #2a313d;
     --text: #e6eaf0;
     --muted: #8b95a5;
-    --accent: #ff5722;
-    --accent-2: #ffab40;
+    --accent: #ff544f;
+    --accent-2: #fad126;
     --radius: 10px;
   }
 
@@ -337,8 +337,9 @@
 
   button.primary {
     width: 100%;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    color: #14100c;
+    /* // gradient angle at 90 deg  */
+    background: linear-gradient(0deg, var(--accent), var(--accent-2)) ;
+    color: white;
     border: none;
     border-radius: 9px;
     padding: 13px 16px;
@@ -524,9 +525,9 @@
       <div class="field">
         <div class="label-row">
           <label for="fontSize">Font size</label>
-          <span class="value" id="fontSizeVal">96px</span>
+          <span class="value" id="fontSizeVal">85px</span>
         </div>
-        <input type="range" id="fontSize" min="20" max="120" step="1" value="96" />
+        <input type="range" id="fontSize" min="20" max="120" step="1" value="85" />
       </div>
       <div class="field">
         <div class="label-row">
@@ -538,7 +539,7 @@
       <div class="field">
         <div class="label-row">
           <label for="textY">Vertical position</label>
-          <span class="value" id="textYVal">93%</span>
+          <span class="value" id="textYVal">92%</span>
         </div>
         <input type="range" id="textY" min="0" max="100" step="1" value="93" />
       </div>
