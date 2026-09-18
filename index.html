@@ -55,10 +55,33 @@
 
   .stage-header {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     margin-bottom: 12px;
   }
+
+  .stage-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tool-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s, opacity 0.15s;
+  }
+
+  .tool-btn:hover:not(:disabled) { border-color: #3d4757; }
+  .tool-btn:disabled { opacity: 0.35; cursor: default; }
 
   h1 {
     font-size: 18px;
@@ -533,7 +556,15 @@
   <main class="stage">
     <div class="stage-header">
       <h1>YouTube Thumbnail Generator</h1>
-      <span class="badge" id="dims">1280 &times; 720</span>
+      <div class="stage-actions">
+        <button class="tool-btn" type="button" id="undoBtn" title="Undo (Cmd/Ctrl+Z)" disabled>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+        </button>
+        <button class="tool-btn" type="button" id="redoBtn" title="Redo (Cmd/Ctrl+Shift+Z)" disabled>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>
+        </button>
+        <span class="badge" id="dims">1280 &times; 720</span>
+      </div>
     </div>
     <div class="canvas-wrap">
       <canvas id="canvas" width="1280" height="720"></canvas>
@@ -896,6 +927,8 @@
   var resetBtn = document.getElementById("reset");
   var saveSettingsBtn = document.getElementById("saveSettings");
   var settingsStatus = document.getElementById("settingsStatus");
+  var undoBtn = document.getElementById("undoBtn");
+  var redoBtn = document.getElementById("redoBtn");
 
   var SETTINGS_KEY = "yt-thumbnail-generator:settings";
   var SETTINGS_FIELDS = [
@@ -1614,6 +1647,7 @@
       if (layers[i].id === targetId) to = i;
     }
     if (from < 0 || to < 0) return;
+    pushUndo();
     var moved = layers.splice(from, 1)[0];
     layers.splice(to, 0, moved);
     refreshLayerPanel();
@@ -1626,6 +1660,7 @@
     if (index < 0) return;
     if (layer.image && !window.confirm('Delete layer "' + (layer.name || layer.type) + '"?')) return;
     if (eraserLayer === layer) exitEraser();
+    pushUndo();
 
     layers.splice(index, 1);
     if (selectedLayer === layer) selectedLayer = layers[Math.min(index, layers.length - 1)];
@@ -1637,6 +1672,7 @@
   }
 
   function addTextLayer() {
+    pushUndo();
     var layer = createTextLayer();
     var count = 0;
     for (var i = 0; i < layers.length; i++) if (layers[i].type === "text") count++;
@@ -1654,6 +1690,7 @@
       var dataUrl = evt.target.result;
       var img = new Image();
       img.onload = function () {
+        pushUndo();
         var layer = createImageLayer();
         layer.image = img;
         layer.src = dataUrl;
@@ -1720,6 +1757,7 @@
       var dataUrl = evt.target.result;
       var img = new Image();
       img.onload = function () {
+        pushUndo();
         var layer = backgroundLayer() || createBackgroundLayer();
         if (layers.indexOf(layer) < 0) layers.unshift(layer);
         layer.image = img;
@@ -1800,6 +1838,10 @@
     refreshSettingsStatus();
     selectLayer(layers[1]);
     render();
+
+    undoStack.length = 0;
+    redoStack.length = 0;
+    updateUndoButtons();
   }
 
   function readSettings() {
@@ -1997,6 +2039,7 @@
       var mask = output && output[0] && output[0].mask;
       if (!mask) throw new Error("the model returned no mask");
 
+      pushUndo();
       layer.image = applyMaskToImage(layer.image, mask);
       layer.busy = false;
       layer.name = (layer.name || "Image") + " (cutout)";
@@ -2047,6 +2090,7 @@
   canvas.addEventListener("pointerdown", function (e) {
     if (eraserLayer) {
       if (!eraserLayer.eraseCanvas) return;
+      pushUndo();
       eraseState = { layer: eraserLayer, id: e.pointerId, prevX: null, prevY: null };
       canvas.setPointerCapture(e.pointerId);
       eraseStrokeTo(pointerCanvasPos(e));
@@ -2247,6 +2291,112 @@
     render();
   }
 
+  /* ---------------- Undo / redo ---------------- */
+
+  var MAX_HISTORY = 50;
+  var undoStack = [];
+  var redoStack = [];
+
+  function isCanvas(value) {
+    return typeof HTMLCanvasElement !== "undefined" && value instanceof HTMLCanvasElement;
+  }
+
+  function copyCanvas(source) {
+    var copy = document.createElement("canvas");
+    copy.width = source.width;
+    copy.height = source.height;
+    copy.getContext("2d").drawImage(source, 0, 0);
+    return copy;
+  }
+
+  function cloneLayer(layer) {
+    var copy = {};
+    for (var key in layer) {
+      if (key === "_outline") continue;
+      copy[key] = layer[key];
+    }
+    copy.busy = false;
+
+    // the eraser mutates its canvas in place, so that one has to be copied;
+    // every other image is only ever replaced, never mutated, so it can be shared
+    if (layer.eraseCanvas && layer.eraseCanvas === layer.image && isCanvas(layer.image)) {
+      copy.image = copyCanvas(layer.image);
+      copy.eraseCanvas = copy.image;
+      copy._eraseSource = copy.image;
+    }
+    return copy;
+  }
+
+  function snapshot() {
+    return {
+      layers: layers.map(cloneLayer),
+      selectedId: selectedLayer ? selectedLayer.id : null
+    };
+  }
+
+  function updateUndoButtons() {
+    undoBtn.disabled = undoStack.length === 0;
+    redoBtn.disabled = redoStack.length === 0;
+  }
+
+  function pushUndo() {
+    undoStack.push(snapshot());
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack.length = 0;
+    updateUndoButtons();
+  }
+
+  function restoreSnapshot(state) {
+    if (eraserLayer) {
+      eraserLayer = null;
+      eraseState = null;
+      lastEraseClient = null;
+      updateEraserUI();
+    }
+    dragState = null;
+
+    layers = state.layers;
+    selectedLayer = null;
+    for (var i = 0; i < layers.length; i++) {
+      if (layers[i].id === state.selectedId) selectedLayer = layers[i];
+    }
+    if (!selectedLayer) selectedLayer = layers[layers.length - 1] || null;
+
+    refreshLayerPanel();
+    updatePanelVisibility();
+    syncControlsFromLayer(selectedLayer);
+    updateCanvasCursor();
+    render();
+    updateUndoButtons();
+  }
+
+  function undo() {
+    if (!undoStack.length) return;
+    redoStack.push(snapshot());
+    if (redoStack.length > MAX_HISTORY) redoStack.shift();
+    restoreSnapshot(undoStack.pop());
+  }
+
+  function redo() {
+    if (!redoStack.length) return;
+    undoStack.push(snapshot());
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    restoreSnapshot(redoStack.pop());
+  }
+
+  undoBtn.addEventListener("click", undo);
+  redoBtn.addEventListener("click", redo);
+
+  document.addEventListener("keydown", function (e) {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    if (e.key !== "z" && e.key !== "Z") return;
+    var target = e.target;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+    e.preventDefault();
+    if (e.shiftKey) redo();
+    else undo();
+  });
+
   /* ---------------- Control wiring ---------------- */
 
   bgInput.addEventListener("change", function (e) {
@@ -2256,6 +2406,7 @@
   clearBgBtn.addEventListener("click", function () {
     var layer = backgroundLayer();
     if (layer) {
+      if (layer.image) pushUndo();
       layer.image = null;
       layer.src = null;
       layer.x = 0;
